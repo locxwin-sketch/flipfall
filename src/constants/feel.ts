@@ -1,0 +1,31 @@
+// Juice constants. Milliseconds, because these are render-time effects and must
+// never feed back into the simulation — everything here is cosmetic by construction.
+
+/** Sim frozen, render continues. The cheapest "expensive game" signal there is. */
+export const HITSTOP_MS = 90
+
+export const SHAKE_DEATH_PX = 9
+export const SHAKE_DEATH_MS = 320
+export const SHAKE_FLIP_PX = 2
+export const SHAKE_FLIP_MS = 80
+export const SHAKE_LAND_PX = 1.5
+export const SHAKE_LAND_MS = 60
+
+/** White frame on death, then out. */
+export const FLASH_MS = 120
+
+export const TRAIL_INTERVAL_MS = 26
+export const TRAIL_LIFE_MS = 320
+
+export const FLIP_BURST = 9
+export const LAND_BURST = 6
+export const DEATH_BURST = 26
+
+/** Squash on flip: the player compresses along the axis it was moving. */
+export const SQUASH_MS = 140
+export const SQUASH_AMOUNT = 0.35
+
+/** Parallax scroll rates, as a fraction of world scroll. */
+export const PARALLAX_FAR = 0.12
+export const PARALLAX_MID = 0.26
+export const PARALLAX_NEAR = 0.48

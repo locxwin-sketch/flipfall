@@ -1,13 +1,34 @@
-// Composition root: canvas, loop, input, sim, render.
+// Composition root: canvas, loop, input, sim, fx, render.
 
 import './style.css'
-import { FIXED_DT } from '@/constants/physics'
+import { FIXED_DT, PLAYER_H, PLAYER_W } from '@/constants/physics'
+import { CEIL_Y, FLOOR_Y, PLAYER_X } from '@/constants/layout'
+import { PALETTE } from '@/constants/palette'
+import {
+  DEATH_BURST,
+  FLASH_MS,
+  FLIP_BURST,
+  HITSTOP_MS,
+  LAND_BURST,
+  SHAKE_DEATH_MS,
+  SHAKE_DEATH_PX,
+  SHAKE_FLIP_MS,
+  SHAKE_FLIP_PX,
+  SHAKE_LAND_MS,
+  SHAKE_LAND_PX,
+  SQUASH_MS,
+  TRAIL_INTERVAL_MS,
+  TRAIL_LIFE_MS,
+} from '@/constants/feel'
 import { createLoop } from '@/lib/engine/loop'
 import { bindInput, pollPress, pressQueueDepth, setInputEnabled } from '@/lib/engine/input'
 import { initAudio, setMuted, sfx } from '@/lib/engine/audio'
 import { T01_LEVEL } from '@/lib/game/level'
 import { initRun, stepRun, type RunState } from '@/lib/game/sim'
 import { ReplayRecorder } from '@/lib/game/replay'
+import { burst, clearParticles, spray, trail, updateParticles } from '@/lib/fx/particles'
+import { freeze, isFrozen, resetFx, shake, updateFx } from '@/lib/fx/shake'
+import { drawBackdrop } from '@/lib/render/backdrop'
 import { render, type HudInfo } from '@/lib/render/renderer'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')
@@ -25,13 +46,30 @@ let started = false
 let deaths = 0
 let best = 0
 
+// Render-time only. None of this feeds back into the simulation.
+let squash = 0
+let flash = 0
+let trailTimer = 0
+
+function playerWorldX(): number {
+  return run.distance + PLAYER_X + PLAYER_W / 2
+}
+
 function reset(): void {
   run = initRun(level)
   prev = run
   recorder.reset()
+  clearParticles()
+  resetFx()
+  squash = 0
+  flash = 0
 }
 
 function fixedUpdate(dt: number): void {
+  // Hitstop freezes the simulation while rendering continues. Cosmetic by
+  // construction: the sim simply does not advance, so no state is invented.
+  if (isFrozen()) return
+
   prev = run
 
   if (!started) {
@@ -40,9 +78,6 @@ function fixedUpdate(dt: number): void {
   }
 
   if (run.dead || run.finished) {
-    // Zero restart lockout. A press during the death frames is already sitting in
-    // the queue and restarts on the very next tick — this is the one-more-try loop,
-    // and a 500ms "get ready" here is the most common way the genre kills itself.
     if (pollPress()) reset()
     return
   }
@@ -51,14 +86,28 @@ function fixedUpdate(dt: number): void {
   if (flip) {
     recorder.record(run.tick)
     sfx.flip()
+    squash = 1
+    shake(SHAKE_FLIP_PX, SHAKE_FLIP_MS)
+    burst(playerWorldX(), run.player.y + PLAYER_H / 2, FLIP_BURST, 190, 260, PALETTE.player, 3)
   }
 
   const next = stepRun(run, flip, dt, level)
 
-  if (!run.player.grounded && next.player.grounded) sfx.land()
+  if (!run.player.grounded && next.player.grounded) {
+    sfx.land()
+    shake(SHAKE_LAND_PX, SHAKE_LAND_MS)
+    const dir = next.player.gravitySign === 1 ? -1 : 1
+    spray(playerWorldX(), next.player.y + (dir === -1 ? PLAYER_H : 0), LAND_BURST, dir, 150, 240, PALETTE.cloud)
+  }
+
   if (next.dead && !run.dead) {
     deaths++
     sfx.die()
+    freeze(HITSTOP_MS)
+    shake(SHAKE_DEATH_PX, SHAKE_DEATH_MS)
+    flash = 1
+    burst(playerWorldX(), next.player.y + PLAYER_H / 2, DEATH_BURST, 320, 520, PALETTE.playerCore, 4, 900)
+    burst(playerWorldX(), next.player.y + PLAYER_H / 2, 10, 160, 420, PALETTE.player, 3, 700)
     best = Math.max(best, Math.round(next.distance))
   }
   if (next.finished) best = Math.max(best, Math.round(next.distance))
@@ -66,7 +115,23 @@ function fixedUpdate(dt: number): void {
   run = next
 }
 
-function draw(alpha: number): void {
+function draw(alpha: number, frameDt: number): void {
+  updateFx(frameDt)
+  updateParticles(frameDt)
+
+  if (squash > 0) squash = Math.max(0, squash - frameDt / (SQUASH_MS / 1000))
+  if (flash > 0) flash = Math.max(0, flash - frameDt / (FLASH_MS / 1000))
+
+  if (started && !run.dead && !run.finished && !run.player.grounded) {
+    trailTimer += frameDt * 1000
+    while (trailTimer >= TRAIL_INTERVAL_MS) {
+      trailTimer -= TRAIL_INTERVAL_MS
+      trail(playerWorldX(), run.player.y + PLAYER_H / 2, PLAYER_W * 0.7, TRAIL_LIFE_MS, PALETTE.trail)
+    }
+  } else {
+    trailTimer = 0
+  }
+
   const hud: HudInfo = {
     ticksPerSecond: loop.ticksPerSecond,
     deaths,
@@ -75,16 +140,33 @@ function draw(alpha: number): void {
     dead: run.dead,
     finished: run.finished,
     started,
+    squash,
+    flash,
   }
-  render(ctx!, run, prev, alpha, level, hud)
+  render(ctx!, run, prev, alpha, level, hud, drawBackdrop)
+}
+
+// Dev-only: ?skip=<px> starts the run partway in, so art and level changes can be
+// reviewed without playing to 24s every time. Never reachable in a production build.
+if (import.meta.env.DEV) {
+  const skip = Number(new URLSearchParams(location.search).get('skip'))
+  if (Number.isFinite(skip) && skip > 0) {
+    started = true
+    // Mid-corridor, not on the floor: spawning grounded at an arbitrary distance
+    // usually lands inside a hazard and dies on frame one.
+    run = {
+      ...run,
+      distance: skip,
+      player: { ...run.player, y: (CEIL_Y + FLOOR_Y) / 2 - PLAYER_H / 2, grounded: false },
+    }
+    prev = run
+  }
 }
 
 const loop = createLoop({ fixedUpdate, render: draw })
 
 bindInput(canvas, () => initAudio())
 
-// The real ad hazard: an in-page overlay leaves the tab visible, so rAF keeps firing
-// and the sim advances under the ad. Same handling for a backgrounded tab.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     setInputEnabled(false)
@@ -99,7 +181,6 @@ document.addEventListener('visibilitychange', () => {
 
 loop.start()
 
-// Dev-only handle for the acceptance checks (tick rate, queue depth, replays).
 if (import.meta.env.DEV) {
   Object.assign(window, {
     __game: {
