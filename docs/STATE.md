@@ -13,7 +13,6 @@
 
 ## Next (in dependency order)
 
-- [ ] `002-ship` Pages workflow, public URL, phone-on-cellular check
 - [ ] `003a-rng` Seeded RNG
 - [ ] `003b-difficulty` Difficulty table + tests
 - [ ] `004-solver` Reachability solver + solver.test.ts + measured budget on real Android
@@ -22,7 +21,14 @@
 
 ## Done
 
+- [x] `002-ship` Public repo + Pages via Actions. Live at
+      https://locxwin-sketch.github.io/flipfall/ — 2026-09-03
 - [x] `000-scaffold` Vite + TS strict + eslint + vitest, canvas shell — 2026-09-03
+
+<!-- 002 shipped ahead of the kill-gate verdict because the phone was off-wifi and a
+     public URL was the only way to playtest. This is the first public artifact on
+     this GitHub account; the never-deployed pattern is broken. -->
+
 
 ## Notes and deferred items
 
