@@ -16,9 +16,8 @@ npm run dev      # http://localhost:5173 — the only way to play it
 npm run build    # tsc --noEmit && vite build
 npm test         # vitest run
 npm run lint     # eslint .
+# dev-only URL params: ?seed=<n> pins the world, ?skip=<px> starts partway in
 ```
-
-Dev-only URL params: `?seed=<n>` pins the world, `?skip=<px>` starts partway in.
 
 ## Environment
 
@@ -44,9 +43,7 @@ Deliberate duplication, so nobody "fixes" it: the palette lives in both
 ## Load-bearing details
 
 `TICK_HZ = 120` is not taste — at 60Hz the per-tick diagonal exceeds
-`MIN_HAZARD_THICKNESS` and the player tunnels through hazards. `physics.test.ts`
-asserts both directions.
-
+`MIN_HAZARD_THICKNESS` and the player tunnels. `physics.test.ts` asserts both ways.
 `base: './'` in `vite.config.ts` — Pages and portals serve from a sub-path; an
 absolute-path build renders blank.
 
