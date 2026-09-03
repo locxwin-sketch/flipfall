@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { FIXED_DT, PLAYER_H, TICK_HZ } from '@/constants/physics'
 import { CEIL_Y, FLOOR_Y } from '@/constants/layout'
 import { T01_LEVEL } from './level'
-import { initRun, stepRun, type RunState } from './sim'
+import { hitbox, initRun, stepRun, type RunState } from './sim'
 
 /**
  * Minimum timing tolerance, in ticks, on the tightest flip a clearing solution
@@ -22,41 +22,75 @@ const MIN_SLACK_TICKS = 6
 interface Node {
   run: RunState
   presses: number[]
+  /** Smallest vertical clearance to any hazard seen so far on this line. */
+  clearance: number
+}
+
+/** Vertical margin from the hitbox to any hazard whose x-range it currently overlaps. */
+function clearanceAt(s: RunState): number {
+  const b = hitbox(s.player, s.distance)
+  let min = Infinity
+  for (const h of T01_LEVEL.hazards) {
+    if (h.x + h.w < b.x || h.x > b.x + b.w) continue
+    const gap = h.y > b.y ? h.y - (b.y + b.h) : b.y - (h.y + h.h)
+    if (gap < min) min = gap
+  }
+  return min
 }
 
 /**
  * Bounded beam search returning the press schedule, not just a verdict. A crude
  * stand-in for the T04 reachability solver — but crucially it integrates through
  * the game's own stepRun, so it cannot certify something the game would kill.
+ *
+ * It ranks by CLEARANCE as well as progress. An earlier version returned the first
+ * clearing schedule found, which measured an arbitrary knife-edge line: widening a
+ * gap scored WORSE, because the extra room let the search discover a more marginal
+ * route. The question is whether a forgiving solution exists, not whether some
+ * solution does.
  */
 function findClearingSchedule(decisionEvery = 4, beamWidth = 700): number[] | null {
-  let beam: Node[] = [{ run: initRun(T01_LEVEL), presses: [] }]
+  let beam: Node[] = [{ run: initRun(T01_LEVEL), presses: [], clearance: Infinity }]
+  let bestPresses: number[] | null = null
+  let bestClear = -Infinity
 
-  for (let round = 0; round < 2000 && beam.length; round++) {
+  for (let round = 0; round < 2400 && beam.length; round++) {
     const next: Node[] = []
     for (const node of beam) {
       for (const flip of [false, true]) {
         let s = node.run
+        let clear = node.clearance
         const pressTick = s.tick
         for (let t = 0; t < decisionEvery; t++) {
           s = stepRun(s, flip && t === 0, FIXED_DT, T01_LEVEL)
           if (s.dead || s.finished) break
+          clear = Math.min(clear, clearanceAt(s))
         }
         if (s.dead) continue
         const presses = flip ? [...node.presses, pressTick] : node.presses
-        if (s.finished) return presses
-        next.push({ run: s, presses })
+        const n: Node = { run: s, presses, clearance: clear }
+        if (s.finished) {
+          if (clear > bestClear) {
+            bestClear = clear
+            bestPresses = presses
+          }
+          continue
+        }
+        next.push(n)
       }
     }
+    if (bestPresses && next.length === 0) break
     const seen = new Map<string, Node>()
     for (const n of next) {
       const k = `${Math.round(n.run.player.y / 4)}:${Math.round(n.run.player.vy / 25)}:${n.run.player.gravitySign}`
       const prior = seen.get(k)
-      if (!prior || n.run.distance > prior.run.distance) seen.set(k, n)
+      if (!prior || n.clearance > prior.clearance) seen.set(k, n)
     }
-    beam = [...seen.values()].sort((a, b) => b.run.distance - a.run.distance).slice(0, beamWidth)
+    beam = [...seen.values()]
+      .sort((a, b) => b.run.distance - a.run.distance || b.clearance - a.clearance)
+      .slice(0, beamWidth)
   }
-  return null
+  return bestPresses
 }
 
 function clears(presses: readonly number[]): boolean {

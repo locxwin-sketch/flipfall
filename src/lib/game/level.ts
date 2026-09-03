@@ -44,12 +44,22 @@ export function spikeRun(
  * flip, because neither surface is landable here.
  */
 export function pinch(x: number, gapH: number, w = SPIKE_W): Rect[] {
-  const total = FLOOR_Y - CEIL_Y
-  const each = (total - gapH) / 2
-  return [
-    { x, y: CEIL_Y, w, h: each },
-    { x, y: FLOOR_Y - each, w, h: each },
-  ]
+  return pinchAt(x, gapH, (CEIL_Y + FLOOR_Y) / 2, w)
+}
+
+/**
+ * Pinch whose gap is centred on an arbitrary y. An off-centre gap is what forces
+ * real altitude control — a centred one can be cleared by drifting through the
+ * middle, but a high or low gap has to be arrived at deliberately.
+ */
+export function pinchAt(x: number, gapH: number, gapCenterY: number, w = SPIKE_W): Rect[] {
+  const half = gapH / 2
+  const top = Math.max(CEIL_Y, gapCenterY - half)
+  const bottom = Math.min(FLOOR_Y, gapCenterY + half)
+  const out: Rect[] = []
+  if (top > CEIL_Y) out.push({ x, y: CEIL_Y, w, h: top - CEIL_Y })
+  if (bottom < FLOOR_Y) out.push({ x, y: bottom, w, h: FLOOR_Y - bottom })
+  return out
 }
 
 // --- the T01 level -----------------------------------------------------------
@@ -88,10 +98,21 @@ function buildT01Level(): Level {
     ...pinch(4900, 210),
     floorSpike(5500),
     ...pinch(5900, 200),
+
+    // 24-30s: "Five Ledges" — five places to stand, each smaller than the last.
+    // Landing zeroes vy and is the player's reset button, so this section rations
+    // it: revoke the floor, then the ceiling, then narrow the gates.
+    ...spikeRun(6340, 4, 92, 'floor'), // floor revoked for 300px
+    ...spikeRun(6680, 3, 96, 'ceil'), // ceiling revoked; nowhere left to rest
+    ...pinchAt(6980, 250, 290), // calibration gate — generous, teaches the line
+    ...pinchAt(7190, 190, 290),
+    ...pinchAt(7400, 130, 290), // the eye — tightest gap in the level
+    ...pinchAt(7600, 170, 390), // off-centre and low: altitude must be deliberate
+    floorSpike(7740), // punishes flopping onto the floor at the finish
   ]
 
   return {
-    lengthPx: 6400,
+    lengthPx: 7800,
     corridor: { floorY: FLOOR_Y, ceilY: CEIL_Y },
     hazards,
   }
