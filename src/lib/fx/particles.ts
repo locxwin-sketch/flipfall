@@ -100,6 +100,50 @@ export function trail(x: number, y: number, size: number, lifeMs: number, color:
   spawn(x, y, 0, 0, lifeMs, size, color)
 }
 
+/**
+ * Blows a sprite apart into its own pixels, each keeping its colour and flying
+ * outward from the sprite's centre.
+ *
+ * This reads far better than a generic coloured burst because the debris is
+ * recognisably the thing that just died — for a moment you can still see the pig
+ * in the shrapnel.
+ */
+export function shatter(
+  centreX: number,
+  centreY: number,
+  pixels: readonly { dx: number; dy: number; color: string }[],
+  gridW: number,
+  gridH: number,
+  cell: number,
+  speed: number,
+  lifeMs: number,
+  gravity: number,
+): void {
+  const halfW = (gridW * cell) / 2
+  const halfH = (gridH * cell) / 2
+  for (const p of pixels) {
+    // Offset of this pixel from the sprite centre, in world px.
+    const ox = p.dx * cell - halfW + cell / 2
+    const oy = p.dy * cell - halfH + cell / 2
+    const dist = Math.hypot(ox, oy) || 1
+    // Outward along its own offset, so the sprite comes apart rather than
+    // scattering at random. Jitter keeps it from looking like a clean starburst.
+    const jitter = 0.7 + Math.random() * 0.8
+    const vx = (ox / dist) * speed * jitter + (Math.random() - 0.5) * speed * 0.35
+    const vy = (oy / dist) * speed * jitter - speed * 0.25 + (Math.random() - 0.5) * speed * 0.35
+    spawn(
+      centreX + ox,
+      centreY + oy,
+      vx,
+      vy,
+      lifeMs * (0.65 + Math.random() * 0.7),
+      cell,
+      p.color,
+      gravity,
+    )
+  }
+}
+
 export function updateParticles(dt: number): void {
   for (const p of pool) {
     if (p.life <= 0) continue

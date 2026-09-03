@@ -3,7 +3,9 @@ import { PLAYER_H, PLAYER_W, VIEW_H, VIEW_W } from '@/constants/physics'
 import { CEIL_TOP, CEIL_Y, FLOOR_Y, PLAYER_X } from '@/constants/layout'
 import { SQUASH_AMOUNT } from '@/constants/feel'
 import { drawParticles } from '@/lib/fx/particles'
-import { shakeOffset } from '@/lib/fx/shake'
+import { drawRings } from '@/lib/fx/shockwave'
+import { drawPig } from './sprites'
+import { motionScale, shakeOffset } from '@/lib/fx/shake'
 import type { Rect } from '@/lib/game/level'
 import type { World } from '@/lib/game/world'
 import { score, type RunState } from '@/lib/game/sim'
@@ -88,7 +90,18 @@ function hazard(ctx: CanvasRenderingContext2D, h: Rect): void {
   }
 }
 
-function player(ctx: CanvasRenderingContext2D, px: number, py: number, gravitySign: 1 | -1, squash: number): void {
+function player(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  gravitySign: 1 | -1,
+  squash: number,
+  dead: boolean,
+): void {
+  // The pig IS the death animation's raw material — once it dies the sprite is
+  // gone and its pixels are in flight, so drawing nothing here is correct.
+  if (dead) return
+
   // Squash along the axis of travel, stretch across it. Volume roughly preserved.
   const s = squash * SQUASH_AMOUNT
   const w = PLAYER_W * (1 + s)
@@ -96,17 +109,7 @@ function player(ctx: CanvasRenderingContext2D, px: number, py: number, gravitySi
   const x = px + (PLAYER_W - w) / 2
   const y = py + (gravitySign === 1 ? PLAYER_H - h : 0)
 
-  ctx.fillStyle = PALETTE.playerOutline
-  ctx.fillRect(x - 2, y - 2, w + 4, h + 4)
-  ctx.fillStyle = PALETTE.player
-  ctx.fillRect(x, y, w, h)
-  ctx.fillStyle = PALETTE.playerCore
-  ctx.fillRect(x + 4, y + 4, w - 8, h - 8)
-
-  // A bar on the gravity-facing edge: the only readout of which way is "down".
-  ctx.fillStyle = PALETTE.playerOutline
-  const barY = gravitySign === 1 ? y + h - 5 : y + 1
-  ctx.fillRect(x + 4, barY, w - 8, 4)
+  drawPig(ctx, x, y, w, h, gravitySign)
 }
 
 export function render(
@@ -140,14 +143,18 @@ export function render(
     hazard(ctx, h)
   }
 
+  drawRings(ctx)
   drawParticles(ctx)
-  player(ctx, camX + PLAYER_X, playerY, s.player.gravitySign, hud.squash)
+  player(ctx, camX + PLAYER_X, playerY, s.player.gravitySign, hud.squash, s.dead)
 
   ctx.restore()
 
   if (hud.flash > 0) {
+    // 0.35, not 0.75. A full-screen white flash fires on every death, and in this
+    // genre that is dozens of times per session — at 0.75 it washes the whole frame
+    // out and becomes tiring rather than punchy. Halved again under reduced motion.
     ctx.fillStyle = PALETTE.flash
-    ctx.globalAlpha = hud.flash * 0.75
+    ctx.globalAlpha = hud.flash * (motionScale() ? 0.35 : 0.15)
     ctx.fillRect(0, 0, VIEW_W, VIEW_H)
     ctx.globalAlpha = 1
   }

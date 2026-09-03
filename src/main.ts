@@ -7,8 +7,14 @@ import { PALETTE } from '@/constants/palette'
 import {
   DEATH_BURST,
   FLASH_MS,
+  HITSTOP_DEATH_MS,
+  RING_MS,
+  RING_RADIUS,
+  SHATTER_GRAVITY,
+  SHATTER_LIFE_MS,
+  SHATTER_SPEED,
+  SMOKE_PUFFS,
   FLIP_BURST,
-  HITSTOP_MS,
   LAND_BURST,
   SHAKE_DEATH_MS,
   SHAKE_DEATH_PX,
@@ -27,7 +33,9 @@ import { World } from '@/lib/game/world'
 import { difficultyAt } from '@/lib/game/difficulty'
 import { initRun, score, stepRun, type RunState } from '@/lib/game/sim'
 import { ReplayRecorder } from '@/lib/game/replay'
-import { burst, clearParticles, spray, trail, updateParticles } from '@/lib/fx/particles'
+import { burst, clearParticles, shatter, spray, trail, updateParticles } from '@/lib/fx/particles'
+import { clearRings, ring, updateRings } from '@/lib/fx/shockwave'
+import { PIG_H, PIG_PIXELS, PIG_W, PIXEL } from '@/lib/render/sprites'
 import { freeze, isFrozen, resetFx, shake, updateFx } from '@/lib/fx/shake'
 import { drawBackdrop } from '@/lib/render/backdrop'
 import { render, type HudInfo } from '@/lib/render/renderer'
@@ -69,6 +77,7 @@ function reset(): void {
   prev = run
   recorder.start(world.seed)
   clearParticles()
+  clearRings()
   resetFx()
   squash = 0
   flash = 0
@@ -113,11 +122,28 @@ function fixedUpdate(dt: number): void {
   if (next.dead && !run.dead) {
     deaths++
     sfx.die()
-    freeze(HITSTOP_MS)
+    freeze(HITSTOP_DEATH_MS)
     shake(SHAKE_DEATH_PX, SHAKE_DEATH_MS)
     flash = 1
-    burst(playerWorldX(), next.player.y + PLAYER_H / 2, DEATH_BURST, 320, 520, PALETTE.playerCore, 4, 900)
-    burst(playerWorldX(), next.player.y + PLAYER_H / 2, 10, 160, 420, PALETTE.player, 3, 700)
+
+    const cx = playerWorldX()
+    const cy = next.player.y + PLAYER_H / 2
+
+    // The pig comes apart into its own pixels, each keeping its colour, so for a
+    // moment the pig is still legible in the shrapnel.
+    shatter(cx, cy, PIG_PIXELS, PIG_W, PIG_H, PIXEL, SHATTER_SPEED, SHATTER_LIFE_MS, SHATTER_GRAVITY)
+
+    // Two rings, offset in size and timing, so the blast has a front and a wake.
+    // One bright, one dark. A white-on-white ring vanishes against this sky, so
+    // the leading edge is the hazard colour and only the wake is white.
+    ring(cx, cy, RING_RADIUS, RING_MS, PALETTE.hazard, 7)
+    ring(cx, cy, RING_RADIUS * 0.55, RING_MS * 0.7, PALETTE.flash, 4)
+
+    // Smoke drifts up regardless of gravity — it is the one thing in the frame
+    // that is not obeying the mechanic, which is why it reads as smoke.
+    burst(cx, cy, SMOKE_PUFFS, 90, 780, PALETTE.cloud, 6, -140)
+    burst(cx, cy, DEATH_BURST, 300, 520, PALETTE.hazardTip, 3, 800)
+
     best = Math.max(best, score(next))
   }
 
@@ -127,6 +153,7 @@ function fixedUpdate(dt: number): void {
 function draw(alpha: number, frameDt: number): void {
   updateFx(frameDt)
   updateParticles(frameDt)
+  updateRings(frameDt)
 
   if (squash > 0) squash = Math.max(0, squash - frameDt / (SQUASH_MS / 1000))
   if (flash > 0) flash = Math.max(0, flash - frameDt / (FLASH_MS / 1000))
@@ -158,7 +185,15 @@ function draw(alpha: number, frameDt: number): void {
 // Dev-only: ?skip=<px> starts the run partway in, so art and level changes can be
 // reviewed without playing to 24s every time. Never reachable in a production build.
 if (import.meta.env.DEV) {
-  const skip = Number(new URLSearchParams(location.search).get('skip'))
+  const q = new URLSearchParams(location.search)
+  const fixedSeed = Number(q.get('seed'))
+  if (Number.isFinite(fixedSeed) && q.has('seed')) {
+    world = new World(fixedSeed)
+    run = initRun(world)
+    prev = run
+    recorder.start(world.seed)
+  }
+  const skip = Number(q.get('skip'))
   if (Number.isFinite(skip) && skip > 0) {
     started = true
     world.advance(skip)
