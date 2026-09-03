@@ -26,14 +26,31 @@ interface Node {
   clearance: number
 }
 
+// Bucket hazards by x so the per-tick clearance check scans ~2 instead of ~40.
+// This test runs on every push; the unindexed version took 6.7s on a CI runner and
+// blew Vitest's 5s default timeout while passing locally in 1s.
+const BUCKET = 256
+const HAZARD_BUCKETS = new Map<number, typeof T01_LEVEL.hazards>()
+for (const h of T01_LEVEL.hazards) {
+  for (let b = Math.floor(h.x / BUCKET); b <= Math.floor((h.x + h.w) / BUCKET); b++) {
+    const list = HAZARD_BUCKETS.get(b) ?? []
+    list.push(h)
+    HAZARD_BUCKETS.set(b, list)
+  }
+}
+
 /** Vertical margin from the hitbox to any hazard whose x-range it currently overlaps. */
 function clearanceAt(s: RunState): number {
   const b = hitbox(s.player, s.distance)
   let min = Infinity
-  for (const h of T01_LEVEL.hazards) {
-    if (h.x + h.w < b.x || h.x > b.x + b.w) continue
-    const gap = h.y > b.y ? h.y - (b.y + b.h) : b.y - (h.y + h.h)
-    if (gap < min) min = gap
+  for (let k = Math.floor(b.x / BUCKET); k <= Math.floor((b.x + b.w) / BUCKET); k++) {
+    const bucket = HAZARD_BUCKETS.get(k)
+    if (!bucket) continue
+    for (const h of bucket) {
+      if (h.x + h.w < b.x || h.x > b.x + b.w) continue
+      const gap = h.y > b.y ? h.y - (b.y + b.h) : b.y - (h.y + h.h)
+      if (gap < min) min = gap
+    }
   }
   return min
 }
@@ -137,7 +154,7 @@ describe('T01 level', () => {
       `tightest flip allows only ${slack} ticks (${ms}ms). Below ${MIN_SLACK_TICKS} ticks ` +
         `(${Math.round((MIN_SLACK_TICKS / TICK_HZ) * 1000)}ms) the level is unfair, not hard.`,
     ).toBeGreaterThanOrEqual(MIN_SLACK_TICKS)
-  })
+  }, 120_000)
 
   it('keeps every hazard inside the corridor', () => {
     for (const h of T01_LEVEL.hazards) {
