@@ -4,8 +4,9 @@ import { CEIL_TOP, CEIL_Y, FLOOR_Y, PLAYER_X } from '@/constants/layout'
 import { SQUASH_AMOUNT } from '@/constants/feel'
 import { drawParticles } from '@/lib/fx/particles'
 import { shakeOffset } from '@/lib/fx/shake'
-import type { Level, Rect } from '@/lib/game/level'
-import type { RunState } from '@/lib/game/sim'
+import type { Rect } from '@/lib/game/level'
+import type { World } from '@/lib/game/world'
+import { score, type RunState } from '@/lib/game/sim'
 
 export interface HudInfo {
   ticksPerSecond: number
@@ -13,8 +14,9 @@ export interface HudInfo {
   best: number
   queueDepth: number
   dead: boolean
-  finished: boolean
   started: boolean
+  /** Difficulty 0..1, for the on-screen readout. */
+  difficulty: number
   /** 1 immediately after a flip, decaying to 0. Drives the squash. */
   squash: number
   /** 1 on the death frame, decaying to 0. Drives the white flash. */
@@ -112,7 +114,7 @@ export function render(
   s: RunState,
   prev: RunState,
   alpha: number,
-  level: Level,
+  world: World,
   hud: HudInfo,
   drawBackdrop: (ctx: CanvasRenderingContext2D, camX: number, topY: number, botY: number) => void,
 ): void {
@@ -134,10 +136,7 @@ export function render(
   ctx.fillRect(camX, FLOOR_Y, VIEW_W, 3)
   ctx.fillRect(camX, CEIL_Y - 3, VIEW_W, 3)
 
-  const left = camX - 60
-  const right = camX + VIEW_W + 60
-  for (const h of level.hazards) {
-    if (h.x + h.w < left || h.x > right) continue
+  for (const h of world.hazardsInRange(camX - 60, camX + VIEW_W + 60)) {
     hazard(ctx, h)
   }
 
@@ -160,7 +159,7 @@ export function render(
     ctx.fillRect(0, 0, VIEW_W, VIEW_H)
   }
 
-  drawHud(ctx, s, hud, level)
+  drawHud(ctx, s, hud)
 }
 
 function text(ctx: CanvasRenderingContext2D, str: string, x: number, y: number, color: string): void {
@@ -170,24 +169,27 @@ function text(ctx: CanvasRenderingContext2D, str: string, x: number, y: number, 
   ctx.fillText(str, x, y)
 }
 
-function drawHud(ctx: CanvasRenderingContext2D, s: RunState, hud: HudInfo, level: Level): void {
-  ctx.font = MONO
+function drawHud(ctx: CanvasRenderingContext2D, s: RunState, hud: HudInfo): void {
+  ctx.font = BIG
   ctx.textAlign = 'left'
-  text(ctx, `${Math.round(s.distance)}`.padStart(4, '0'), 20, 34, PALETTE.hud)
-  text(ctx, `best ${hud.best}`, 20, 54, PALETTE.hudMuted)
-  text(ctx, `deaths ${hud.deaths}`, 20, 72, PALETTE.hudMuted)
+  text(ctx, `${score(s)}`, 20, 46, PALETTE.hud)
+  ctx.font = MONO
+  text(ctx, `best ${hud.best}`, 20, 68, PALETTE.hudMuted)
+  text(ctx, `deaths ${hud.deaths}`, 20, 86, PALETTE.hudMuted)
 
   ctx.textAlign = 'right'
   text(ctx, `${hud.ticksPerSecond} tick/s`, VIEW_W - 20, 34, PALETTE.hudMuted)
   text(ctx, `queue ${hud.queueDepth}`, VIEW_W - 20, 54, PALETTE.hudMuted)
 
-  // Progress bar — the only readout of how much level is left.
-  const barW = 220
+  // Difficulty meter. An endless run has no progress to show, but it does have a
+  // ramp, and seeing it climb is what makes a long run feel like it is going
+  // somewhere rather than just continuing.
+  const barW = 200
   const bx = (VIEW_W - barW) / 2
   ctx.fillStyle = PALETTE.hudDim
   ctx.fillRect(bx, 26, barW, 8)
   ctx.fillStyle = PALETTE.hud
-  ctx.fillRect(bx, 26, barW * Math.min(1, s.distance / level.lengthPx), 8)
+  ctx.fillRect(bx, 26, barW * hud.difficulty, 8)
 
   ctx.textAlign = 'center'
   if (!hud.started) {
@@ -195,9 +197,6 @@ function drawHud(ctx: CanvasRenderingContext2D, s: RunState, hud: HudInfo, level
     text(ctx, 'TAP TO FLIP GRAVITY', VIEW_W / 2, VIEW_H / 2 - 8, PALETTE.hud)
     ctx.font = MONO
     text(ctx, 'space · click · tap', VIEW_W / 2, VIEW_H / 2 + 20, PALETTE.hudMuted)
-  } else if (hud.finished) {
-    ctx.font = BIG
-    text(ctx, 'CLEARED', VIEW_W / 2, VIEW_H / 2, PALETTE.hud)
   } else if (hud.dead) {
     ctx.font = BIG
     text(ctx, 'AGAIN', VIEW_W / 2, VIEW_H / 2, PALETTE.hud)

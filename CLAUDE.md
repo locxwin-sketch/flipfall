@@ -48,18 +48,22 @@ a sub-path, and an absolute-path build renders blank.
 
 ## Current state
 
-T01 code complete and playable: fixed-timestep loop, one-button input, pure
-`stepPlayer`, a hand-authored 30s level, instant restart, replay determinism.
-20 tests green.
+**Endless mode.** A seeded generator assembles chunks from a 12-pattern vocabulary
+across 4 difficulty tiers; the world is regenerated from a single seed, so a replay
+stores `{seed, pressTicks}` and nothing else. Score is distance in metres.
 
-Level is 30s: easy floor-only opening to 10.4s, ceiling hazards, then the closing
-"Five Ledges" section from 24.4s. Tightest required flip tolerates 58ms, enforced by
-`MIN_SLACK_TICKS` in `level.test.ts` — clearability alone is NOT the assertion, since
-a machine will happily find a line no human can fly.
+The difficulty ramp is data in `src/constants/difficulty.ts`, easy until ~2600px
+(~10s) then easing up to 26000px.
 
-Hosting: local only. The repo is private, so GitHub Pages is unavailable on a free
-plan; `.github/workflows/deploy.yml` is correct and disabled, not deleted.
+`generator.test.ts` runs a bounded beam search over generated windows at three
+difficulty points and asserts a *forgiving* line exists — tightest flip must tolerate
+6 ticks (50ms). Clearability alone is NOT the assertion: a machine will happily find a
+line no human can fly, and this game already shipped a 17ms level once.
 
-**Blocked on a human verdict, not on code.** T01 is the kill gate: play it and answer
-"after dying, do I want to tap again?" If no, the project stops — the gate's no-branch
-is *stop*, not *switch mechanic*. See `docs/STATE.md`.
+T01's hand-authored level is deleted. It was a fixture; its primitives are the
+generator's vocabulary.
+
+Hosting: local only (`npm run dev`). Repo is private, so Pages is unavailable on a
+free plan; `.github/workflows/deploy.yml` is correct and disabled, not deleted.
+
+Next: playtest the ramp. See `docs/STATE.md`.

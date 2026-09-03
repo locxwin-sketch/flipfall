@@ -23,8 +23,9 @@ import {
 import { createLoop } from '@/lib/engine/loop'
 import { bindInput, pollPress, pressQueueDepth, setInputEnabled } from '@/lib/engine/input'
 import { initAudio, setMuted, sfx } from '@/lib/engine/audio'
-import { T01_LEVEL } from '@/lib/game/level'
-import { initRun, stepRun, type RunState } from '@/lib/game/sim'
+import { World } from '@/lib/game/world'
+import { difficultyAt } from '@/lib/game/difficulty'
+import { initRun, score, stepRun, type RunState } from '@/lib/game/sim'
 import { ReplayRecorder } from '@/lib/game/replay'
 import { burst, clearParticles, spray, trail, updateParticles } from '@/lib/fx/particles'
 import { freeze, isFrozen, resetFx, shake, updateFx } from '@/lib/fx/shake'
@@ -37,10 +38,17 @@ const ctx = canvas.getContext('2d')
 if (!ctx) throw new Error('2d context unavailable')
 ctx.imageSmoothingEnabled = false
 
-const level = T01_LEVEL
 const recorder = new ReplayRecorder()
 
-let run: RunState = initRun(level)
+// A fresh seed per run. The daily challenge (seed = YYYYMMDD) rides on the same
+// mechanism later; nothing about the world is stored, only the number it grew from.
+function newSeed(): number {
+  return (Math.random() * 0xffffffff) >>> 0
+}
+
+let world = new World(newSeed())
+let run: RunState = initRun(world)
+recorder.start(world.seed)
 let prev: RunState = run
 let started = false
 let deaths = 0
@@ -56,9 +64,10 @@ function playerWorldX(): number {
 }
 
 function reset(): void {
-  run = initRun(level)
+  world = new World(newSeed())
+  run = initRun(world)
   prev = run
-  recorder.reset()
+  recorder.start(world.seed)
   clearParticles()
   resetFx()
   squash = 0
@@ -77,7 +86,7 @@ function fixedUpdate(dt: number): void {
     return
   }
 
-  if (run.dead || run.finished) {
+  if (run.dead) {
     if (pollPress()) reset()
     return
   }
@@ -91,7 +100,8 @@ function fixedUpdate(dt: number): void {
     burst(playerWorldX(), run.player.y + PLAYER_H / 2, FLIP_BURST, 190, 260, PALETTE.player, 3)
   }
 
-  const next = stepRun(run, flip, dt, level)
+  world.advance(run.distance)
+  const next = stepRun(run, flip, dt, world)
 
   if (!run.player.grounded && next.player.grounded) {
     sfx.land()
@@ -108,9 +118,8 @@ function fixedUpdate(dt: number): void {
     flash = 1
     burst(playerWorldX(), next.player.y + PLAYER_H / 2, DEATH_BURST, 320, 520, PALETTE.playerCore, 4, 900)
     burst(playerWorldX(), next.player.y + PLAYER_H / 2, 10, 160, 420, PALETTE.player, 3, 700)
-    best = Math.max(best, Math.round(next.distance))
+    best = Math.max(best, score(next))
   }
-  if (next.finished) best = Math.max(best, Math.round(next.distance))
 
   run = next
 }
@@ -122,7 +131,7 @@ function draw(alpha: number, frameDt: number): void {
   if (squash > 0) squash = Math.max(0, squash - frameDt / (SQUASH_MS / 1000))
   if (flash > 0) flash = Math.max(0, flash - frameDt / (FLASH_MS / 1000))
 
-  if (started && !run.dead && !run.finished && !run.player.grounded) {
+  if (started && !run.dead && !run.player.grounded) {
     trailTimer += frameDt * 1000
     while (trailTimer >= TRAIL_INTERVAL_MS) {
       trailTimer -= TRAIL_INTERVAL_MS
@@ -138,12 +147,12 @@ function draw(alpha: number, frameDt: number): void {
     best,
     queueDepth: pressQueueDepth(),
     dead: run.dead,
-    finished: run.finished,
     started,
+    difficulty: difficultyAt(run.distance),
     squash,
     flash,
   }
-  render(ctx!, run, prev, alpha, level, hud, drawBackdrop)
+  render(ctx!, run, prev, alpha, world, hud, drawBackdrop)
 }
 
 // Dev-only: ?skip=<px> starts the run partway in, so art and level changes can be
@@ -152,6 +161,7 @@ if (import.meta.env.DEV) {
   const skip = Number(new URLSearchParams(location.search).get('skip'))
   if (Number.isFinite(skip) && skip > 0) {
     started = true
+    world.advance(skip)
     // Mid-corridor, not on the floor: spawning grounded at an arbitrary distance
     // usually lands inside a hazard and dies on frame one.
     run = {
@@ -192,6 +202,12 @@ if (import.meta.env.DEV) {
       },
       get queueDepth() {
         return pressQueueDepth()
+      },
+      get seed() {
+        return world.seed
+      },
+      get chunks() {
+        return world.cachedChunks
       },
       replay: () => recorder.build(),
       fixedDt: FIXED_DT,
