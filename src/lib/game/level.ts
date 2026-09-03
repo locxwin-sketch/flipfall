@@ -75,10 +75,14 @@ function buildT01Level(): Level {
 
     // 22-30s: pinches. Neither surface is landable — this is where the mid-air
     // flip, and then the double-flip hover, become mandatory.
-    ...pinch(6300, 150),
-    floorSpike(6800),
-    ...pinch(7100, 130),
-    ...pinch(7500, 120),
+    //
+    // Gaps and spacing are set by the slack floor in level.test.ts, NOT by taste.
+    // The first pass here used 150/130/120px gaps at 400px spacing and produced a
+    // level whose tightest required flip had 17ms of tolerance — below the human
+    // floor, and below one frame on a 60Hz display. Clearable, but not fair.
+    ...pinch(6300, 210),
+    floorSpike(6900),
+    ...pinch(7300, 200),
   ]
 
   return {
