@@ -4,66 +4,59 @@
 
 ## What this is
 
-Flipfall — a one-button precision browser game. Tap flips gravity; the player falls
-toward the new surface under real acceleration. Deliberately brutal after an easy
-opening. Monetised through a game portal (Poki *or* CrazyGames — never both, see
-Portals below), not by collecting payments.
+Flipfall — a one-button precision game. Tap flips gravity; the player falls toward
+the new surface under real acceleration rather than snapping. Endless, seeded,
+deliberately brutal after an easy opening. Aimed at a game portal (Poki *or*
+CrazyGames — never both), not at collecting payments.
 
 ## Commands
 
 ```bash
-npm run dev      # vite dev server
+npm run dev      # http://localhost:5173 — the only way to play it
 npm run build    # tsc --noEmit && vite build
 npm test         # vitest run
 npm run lint     # eslint .
 ```
 
+Dev-only URL params: `?seed=<n>` pins the world, `?skip=<px>` starts partway in.
+
 ## Environment
 
-Node 26 (`.nvmrc`). npm with a committed lockfile. No secrets, no `.env`, no backend —
-the game is fully static and makes zero external network requests at runtime.
+Node 26 (`.nvmrc`). npm, committed lockfile. No secrets, no backend, zero runtime
+dependencies. Hosting is local only; see `docs/JOURNAL.md`.
 
 ## Architecture
 
-- `src/constants/` — physics, palette, difficulty. All px-per-second.
-- `src/lib/engine/` — fixed-timestep loop, input, seeded RNG, AABB, audio, storage.
-- `src/lib/game/` — pure simulation. **`Math.random()` banned here** (eslint-enforced);
-  must be reproducible from a seed alone.
-- `src/lib/fx/` — particles, screenshake, hitstop. Render-only, `Math.random()` fine.
-- `src/lib/render/` — canvas drawing. Replaces the usual `src/components/`; there is
+- `src/constants/` — physics, difficulty, feel, palette, layout. All px-per-second.
+- `src/lib/engine/` — fixed-timestep loop, input, seeded RNG, AABB, audio.
+- `src/lib/game/` — pure simulation. **`Math.random()` banned** (eslint-enforced);
+  reproducible from a seed alone.
+- `src/lib/fx/` — particles, shockwave, screenshake, hitstop. Render-only, so
+  `Math.random()` is fine and cannot affect determinism.
+- `src/lib/render/` — canvas drawing and sprites. Replaces `src/components/`;
   no React here, so React-shaped directories would be cargo-cult.
-- `src/lib/portal/` — the SDK adapter seam. Only one portal adapter is ever written.
+- `src/lib/portal/` — SDK adapter seam. Empty; only one adapter is ever written.
 
-Two deliberate duplications, so nobody "fixes" them: the palette exists in both
+Deliberate duplication, so nobody "fixes" it: the palette lives in both
 `src/style.css` (page chrome) and `src/constants/palette.ts` (canvas), because
-`getComputedStyle` per frame costs real time; and the dark theme is defined twice in
-CSS so an explicit toggle wins in both directions.
+`getComputedStyle` per frame costs real time.
 
-`TICK_HZ = 120` is load-bearing, not taste — at 60Hz the per-tick diagonal exceeds
+## Load-bearing details
+
+`TICK_HZ = 120` is not taste — at 60Hz the per-tick diagonal exceeds
 `MIN_HAZARD_THICKNESS` and the player tunnels through hazards. `physics.test.ts`
-asserts this.
+asserts both directions.
 
-`base: './'` in `vite.config.ts` is load-bearing — Pages and portals both serve from
-a sub-path, and an absolute-path build renders blank.
+`base: './'` in `vite.config.ts` — Pages and portals serve from a sub-path; an
+absolute-path build renders blank.
+
+**Clearable is NOT the fairness assertion.** `generator.test.ts` searches for a
+*forgiving* line and requires the tightest flip to tolerate 6 ticks (50ms). A
+machine will find lines no human can fly; this game shipped a 17ms level once.
+
+**Drawn shape equals collision box** — spike teeth are highlights inside the rect.
 
 ## Current state
 
-**Endless mode.** A seeded generator assembles chunks from a 12-pattern vocabulary
-across 4 difficulty tiers; the world is regenerated from a single seed, so a replay
-stores `{seed, pressTicks}` and nothing else. Score is distance in metres.
-
-The difficulty ramp is data in `src/constants/difficulty.ts`, easy until ~2600px
-(~10s) then easing up to 26000px.
-
-`generator.test.ts` runs a bounded beam search over generated windows at three
-difficulty points and asserts a *forgiving* line exists — tightest flip must tolerate
-6 ticks (50ms). Clearability alone is NOT the assertion: a machine will happily find a
-line no human can fly, and this game already shipped a 17ms level once.
-
-T01's hand-authored level is deleted. It was a fixture; its primitives are the
-generator's vocabulary.
-
-Hosting: local only (`npm run dev`). Repo is private, so Pages is unavailable on a
-free plan; `.github/workflows/deploy.yml` is correct and disabled, not deleted.
-
-Next: playtest the ramp. See `docs/STATE.md`.
+Endless mode playable, 30 tests green. Blocked on a human playtest of the
+difficulty ramp, not on code. See `docs/STATE.md`, then `docs/JOURNAL.md`.
