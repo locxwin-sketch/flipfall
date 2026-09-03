@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover + user-scalable=no: the game is a fixed-aspect canvas.
+         Pinch-zoom and double-tap-zoom would both eat taps. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark light" />
+    <title>Flipfall</title>
+    <!-- CSS is imported from src/main.ts so the bundle has one entry point. -->
+  </head>
+  <body>
+    <main id="stage">
+      <canvas id="game" width="960" height="540" aria-label="Game canvas"></canvas>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
