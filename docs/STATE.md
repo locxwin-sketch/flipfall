@@ -8,8 +8,10 @@
 ## Now
 
 - [ ] `001-prototype` **KILL GATE — awaiting human verdict.** Code complete, 20 tests
-      green, level proven clearable. Needs: three named people to play it and answer
-      "after dying, do I want to tap again?" by 2026-09-06.
+      green, level proven clearable AND humanly timeable (7 ticks / 58ms slack).
+      Play locally: `npm run dev`. Needs a verdict on "after dying, do I want to
+      tap again?" Testers not yet named.
+- [ ] `002-ship` REOPENED — see Done. Blocked on a hosting decision, not on code.
 
 ## Next (in dependency order)
 
@@ -21,14 +23,16 @@
 
 ## Done
 
-- [x] `002-ship` Public repo + Pages via Actions. Live at
-      https://locxwin-sketch.github.io/flipfall/ — 2026-09-03
 - [x] `000-scaffold` Vite + TS strict + eslint + vitest, canvas shell — 2026-09-03
 
-<!-- 002 shipped ahead of the kill-gate verdict because the phone was off-wifi and a
-     public URL was the only way to playtest. This is the first public artifact on
-     this GitHub account; the never-deployed pattern is broken. -->
-
+<!-- 002 (ship) was DONE and then ROLLED BACK on 2026-09-03. The repo was created
+     public, Pages deployed successfully twice, then the repo became private —
+     which disables Pages on a free plan, 404s the site, and fails the workflow at
+     configure-pages. Decision: local-only for now. The deploy workflow is disabled
+     (state: disabled_manually), not deleted; .github/workflows/deploy.yml is intact
+     and correct. To resume: make the repo public, POST /pages with
+     build_type=workflow, `gh workflow enable "Deploy to Pages"`, push.
+     The never-deployed pattern was broken and then un-broken. Worth noticing. -->
 
 ## Notes and deferred items
 

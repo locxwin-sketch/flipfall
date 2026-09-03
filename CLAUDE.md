@@ -52,6 +52,14 @@ T01 code complete and playable: fixed-timestep loop, one-button input, pure
 `stepPlayer`, a hand-authored 30s level, instant restart, replay determinism.
 20 tests green.
 
-**Blocked on a human verdict, not on code.** T01 is the kill gate: three people play
-it and answer "after dying, do I want to tap again?" If no, the project stops — the
-gate's no-branch is *stop*, not *switch mechanic*. See `docs/STATE.md`.
+Level is 30s: easy floor-only opening to 10.4s, ceiling hazards, then the closing
+"Five Ledges" section from 24.4s. Tightest required flip tolerates 58ms, enforced by
+`MIN_SLACK_TICKS` in `level.test.ts` — clearability alone is NOT the assertion, since
+a machine will happily find a line no human can fly.
+
+Hosting: local only. The repo is private, so GitHub Pages is unavailable on a free
+plan; `.github/workflows/deploy.yml` is correct and disabled, not deleted.
+
+**Blocked on a human verdict, not on code.** T01 is the kill gate: play it and answer
+"after dying, do I want to tap again?" If no, the project stops — the gate's no-branch
+is *stop*, not *switch mechanic*. See `docs/STATE.md`.

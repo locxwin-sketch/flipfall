@@ -3,7 +3,11 @@
 A one-button precision game. Tap to flip gravity; you fall toward the new surface
 under real acceleration rather than snapping to it. Easy for about fifteen seconds.
 
-**Play:** https://locxwin-sketch.github.io/flipfall/
+**Play:** `npm install && npm run dev`, then open http://localhost:5173/
+
+(There was a public build at locxwin-sketch.github.io/flipfall/ — it is offline while
+the repo is private, since GitHub Pages needs a public repo on a free plan. The deploy
+workflow is intact and disabled, not deleted.)
 
 Space, click, or tap — all the same input. Death restarts on your next tap with no
 lockout.
