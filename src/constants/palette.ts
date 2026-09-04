@@ -44,6 +44,36 @@ export const PALETTE = {
   playerOutline: '#1a1a24',
   trail: 'rgba(255,255,255,0.30)',
 
+  // Slime. Three values because one flat tone reads as paint: bright is the fresh
+  // spray, mid is the mass, dark is what has been on the lens longest.
+  //
+  // Acid yellow-green, NOT a natural green, and that is forced rather than chosen.
+  // The backdrop is full of greens — hills at #4cb04c, bushes at #37a137 — and every
+  // believable slime colour lands on top of one of them: emerald measures 32 from
+  // hillFar, forest green 40 from bushDark. Shifting hard toward yellow is the only
+  // way green debris stays visible over a green world.
+  slime: '#8ee62b',
+  slimeBright: '#ccff33',
+  slimeDark: '#5a9e00',
+  slimeFilm: 'rgba(110,210,30,0.44)',
+
+  // Piggy-bank burst. The alternate death: the pig is a bank, not a body. Gold is
+  // warm against this sky where red went purple, and the confetti spread is picked
+  // to miss the sky-blue and hill-green already in the frame.
+  coin: '#ffd23f',
+  coinBright: '#fff3a0',
+  // #e0921a measured 40 from brickTop — coins landing on the floor half-vanished.
+  coinDark: '#c9a015',
+  // Pale, not banknote-green: #7dbf6a sat directly on top of hillNear #4cb04c and
+  // the flecks vanished the moment they drifted over a hill. Light enough to read
+  // against both the hills and the sky.
+  note: '#dff0c8',
+  noteDark: '#a8c98a',
+  confettiA: '#ff4d6d',
+  confettiB: '#4dd2ff',
+  confettiC: '#c77dff',
+  confettiD: '#ffa14d',
+
   // UI
   hud: '#ffffff',
   hudShadow: '#1a1a24',
@@ -51,6 +81,13 @@ export const PALETTE = {
   hudDim: 'rgba(26,26,36,0.35)',
   flash: '#ffffff',
   vignette: 'rgba(180,20,40,0.30)',
+  /** Heavier wash under the splatter, so the frame itself reads as slimed. */
+  vignetteSlime: 'rgba(60,120,10,0.52)',
+  /** Gold equivalents, for the coins death. Lighter: a party, not an injury. */
+  // Amber rather than yellow. Yellow over this blue sky is its near-complement and
+  // neutralises to grey — the wash read as haze instead of as a hit.
+  goldFilm: 'rgba(255,138,32,0.46)',
+  vignetteCoins: 'rgba(190,110,20,0.45)',
 } as const
 
 export type PaletteKey = keyof typeof PALETTE

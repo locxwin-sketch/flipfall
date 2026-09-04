@@ -2,8 +2,10 @@ import { PALETTE } from '@/constants/palette'
 import { PLAYER_H, PLAYER_W, VIEW_H, VIEW_W } from '@/constants/physics'
 import { CEIL_TOP, CEIL_Y, FLOOR_Y, PLAYER_X } from '@/constants/layout'
 import { SQUASH_AMOUNT } from '@/constants/feel'
+import type { DeathLook } from '@/constants/death'
 import { drawParticles } from '@/lib/fx/particles'
 import { drawRings } from '@/lib/fx/shockwave'
+import { drawSplatter } from '@/lib/fx/splatter'
 import { drawPig } from './sprites'
 import { motionScale, shakeOffset } from '@/lib/fx/shake'
 import type { Rect } from '@/lib/game/level'
@@ -23,6 +25,10 @@ export interface HudInfo {
   squash: number
   /** 1 on the death frame, decaying to 0. Drives the white flash. */
   flash: number
+  /** 1 on the death frame, decaying to 0 over DEATH_WASH_MS. Drives the wash. */
+  deathWash: number
+  /** Colours for the active death style. See constants/death.ts. */
+  look: DeathLook
 }
 
 const MONO = '600 14px ui-monospace, SFMono-Regular, Menlo, monospace'
@@ -158,13 +164,29 @@ export function render(
     ctx.fillRect(0, 0, VIEW_W, VIEW_H)
     ctx.globalAlpha = 1
   }
+  if (hud.deathWash > 0) {
+    // Squared so it slams on and eases off, rather than sitting at half strength
+    // for half a second. Thinned under reduced motion like every other full-frame
+    // hit.
+    ctx.fillStyle = hud.look.wash
+    ctx.globalAlpha = hud.deathWash * hud.deathWash * (motionScale() ? 1 : 0.35)
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H)
+    ctx.globalAlpha = 1
+  }
   if (hud.dead) {
     const v = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * 0.3, VIEW_W / 2, VIEW_H / 2, VIEW_W * 0.7)
     v.addColorStop(0, 'rgba(0,0,0,0)')
-    v.addColorStop(1, PALETTE.vignette)
+    // Deepened on death so the whole frame reads as hit, not just tinted at the
+    // corners. Reduced motion keeps the old, gentler tint.
+    v.addColorStop(1, motionScale() ? hud.look.vignette : PALETTE.vignette)
     ctx.fillStyle = v
     ctx.fillRect(0, 0, VIEW_W, VIEW_H)
   }
+
+  // Screen space, on purpose: the splat is on the lens, in front of the world and
+  // in front of the vignette. It is drawn before the HUD so a blob can never cover
+  // the score.
+  drawSplatter(ctx)
 
   drawHud(ctx, s, hud)
 }
@@ -205,7 +227,12 @@ function drawHud(ctx: CanvasRenderingContext2D, s: RunState, hud: HudInfo): void
     ctx.font = MONO
     text(ctx, 'space · click · tap', VIEW_W / 2, VIEW_H / 2 + 20, PALETTE.hudMuted)
   } else if (hud.dead) {
+    // The taunt. A rage game that says nothing on death wastes the one moment it
+    // has the player's full attention. The second line is reverse psychology —
+    // it is also still the instruction, since tapping is the only thing to do here.
     ctx.font = BIG
-    text(ctx, 'AGAIN', VIEW_W / 2, VIEW_H / 2, PALETTE.hud)
+    text(ctx, 'YOU SUCK', VIEW_W / 2, VIEW_H / 2 - 6, PALETTE.hud)
+    ctx.font = MONO
+    text(ctx, "DON'T EVEN TRY AGAIN", VIEW_W / 2, VIEW_H / 2 + 22, PALETTE.hudMuted)
   }
 }

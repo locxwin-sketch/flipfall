@@ -1,9 +1,11 @@
 // The difficulty curve, as data rather than a formula buried in code.
 //
-// Distance at which the ramp starts and ends. 2600px at the opening scroll speed
-// is ~10 seconds, which is the "easy opening" the design calls for — long enough
-// to learn that tapping flips gravity, short enough that the game starts.
-export const RAMP_START_PX = 2600
+// Distance at which the ramp starts and ends. 1200px at the opening scroll speed is
+// ~4.6s — two or three flips, which is all it takes to learn that tapping flips
+// gravity. It was 2600px (~10s), and playtest called the opening a drag: the flat
+// prologue and the old ease-in's flat toe compounded, so the first *37 seconds*
+// were one hazard per chunk at tier 0. Nothing changed, so nothing held attention.
+export const RAMP_START_PX = 1200
 export const RAMP_END_PX = 26_000
 
 /** Chunk width. Half a screen, so ~2 chunks are on screen at once. */

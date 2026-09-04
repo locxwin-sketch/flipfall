@@ -11,9 +11,13 @@ export function difficultyAt(distancePx: number): number {
   if (distancePx <= RAMP_START_PX) return 0
   if (distancePx >= RAMP_END_PX) return 1
   const t = (distancePx - RAMP_START_PX) / (RAMP_END_PX - RAMP_START_PX)
-  // Ease-in: the first stretch stays genuinely flat and the middle escalates,
-  // rather than a straight line that makes 20% of the way in feel 20% as hard.
-  return t * t * (3 - 2 * t)
+  // Ease-OUT, and this is a reversal. The original smoothstep eased *in* on the
+  // theory that a flat first stretch reads as a gentle opening. Playtest said the
+  // opposite: because hazardCount and maxTier are rounded, a flat toe means the
+  // player sees literally identical content for half a minute, and "gentle" became
+  // "nothing is happening". Climbing early and flattening at the top puts the
+  // variety where attention is, and still takes ~67s to reach maximum.
+  return 1 - Math.pow(1 - t, 1.6)
 }
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t

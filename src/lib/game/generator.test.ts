@@ -229,8 +229,21 @@ describe('difficulty curve', () => {
 
   it('keeps the first ten seconds genuinely easy', () => {
     // 10s at the opening scroll speed. The product promise, as an assertion.
+    //
+    // This used to read `difficultyAt(at10s) < 0.05`. That threshold was a proxy
+    // for the promise, calibrated against the old ease-IN curve, and when playtest
+    // replaced that curve with an ease-out the proxy failed while the promise it
+    // stood for did not: at 10s the player still meets one hazard, tier 0, and
+    // over 100ms of slack. So the promise is now asserted as the content the
+    // player actually faces, which no future reshaping of the curve can drift away
+    // from silently.
     const at10s = paramsAt(0).scrollSpeed * 10
-    expect(difficultyAt(at10s)).toBeLessThan(0.05)
+    const p = paramsAt(difficultyAt(at10s))
+    expect(p.hazardCount).toBe(1)
+    expect(p.maxTier).toBe(0)
+    // 12 ticks = 100ms, comfortably above the 6-tick (50ms) human floor.
+    expect(p.minSlackTicks).toBeGreaterThanOrEqual(12)
+    expect(p.pinchGap).toBeGreaterThan(240)
   })
 
   it('never asks for timing tighter than the human floor', () => {

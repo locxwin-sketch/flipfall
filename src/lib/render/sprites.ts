@@ -5,7 +5,13 @@
 
 export const PIXEL = 2
 
-const COLORS: Record<string, string> = {
+/**
+ * The pig's whole palette. Exported because `death.test.ts` guards new death styles
+ * against picking debris that matches the pig — debris has to contrast with the
+ * thing it came out of, or it stops reading as debris. Importing it here means that
+ * guard tracks the sprite automatically if the pig is ever recoloured.
+ */
+export const PIG_COLORS: Record<string, string> = {
   k: '#7a2f4a', // outline
   p: '#ff9ec4', // body
   d: '#e87ba6', // body shadow
@@ -48,7 +54,7 @@ function compile(rows: readonly string[]): SpritePixel[] {
   const out: SpritePixel[] = []
   rows.forEach((row, y) => {
     ;[...row].forEach((ch, x) => {
-      const color = COLORS[ch]
+      const color = PIG_COLORS[ch]
       if (color) out.push({ dx: x, dy: y, color })
     })
   })
