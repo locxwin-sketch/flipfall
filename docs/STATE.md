@@ -9,29 +9,31 @@
 
 ## Now
 
-- [ ] `replay-both-changes` Play again. The ramp now climbs early and the death is
-      green and wet; both landed 09-04, neither seen in motion by anyone.
-      `?die=1` previews a death, `?death=coins` the other variant.
+- [ ] `playtest-gauntlet` Play BOTH modes — tap = Endless, hold = Gauntlet. Nothing
+      since 09-03 seen in motion. `?mode=gauntlet` `?die=1&coins=10` `?death=coins`
 
 ## Next (in dependency order)
 
-- [ ] `portal-fork` DECIDE Poki (web-exclusive 5yr) vs CrazyGames. No longer
-      constrained by the art: `DEATH_STYLE` in `src/constants/death.ts` flips
-      between a green-slime death and a piggy-bank one. Decide on terms.
-- [ ] `coyote-buffer` Coyote time + input buffering — the two biggest perceived
-      fairness wins left, and both are pure feel
+- [ ] `gauntlet-b` Moving hazards (plan `eager-knuth` Phase B). Motion phase must be
+      a function of DISTANCE, not tick — the probe has no tick origin
+- [ ] `gauntlet-c` Surface gaps (Phase C) — the only change reaching inside
+      `stepPlayer`; last, and only once B is green
+- [ ] `portal-fork` DECIDE Poki (web-exclusive 5yr) vs CrazyGames. Art no longer
+      constrains it — `DEATH_STYLE` flips slime/piggy-bank. Decide on terms.
+- [ ] `coyote-buffer` Coyote time + input buffering — pure feel, biggest wins left
 - [ ] `thumbnails` Static + animated thumbnails — a hard portal requirement
 
 ## Done
 
-- [x] `death-styles` `DEATH_STYLE` picks slime or coins; shared timings, only colour
-      and shape differ. Taunt: "YOU SUCK / DON'T EVEN TRY AGAIN" — 09-04
-- [x] `judge-explosion` PASSED on timing, then made wetter by request: pixel-art
-      lens splatter, shrapnel, rings, full-frame wash — 09-04
+- [x] `gauntlet-a` Second mode, hold-to-start. Per-mode curves and bests, coins,
+      near-miss grazing, coin-spill death, rotating taunts, `hazardCount` made
+      real. Fairness probe extended to cover it. 62 → 91 tests — 09-05
+- [x] `death-styles` `DEATH_STYLE` picks slime or coins; shared timings, only
+      colour and shape differ — 09-04
+- [x] `judge-explosion` PASSED on timing, then made wetter: splatter, rings — 09-04
 - [x] `playtest-ramp` ANSWERED "flat opening drags". Ease-in → ease-out,
       RAMP_START_PX 2600 → 1200; asserted in `difficulty.test.ts` — 09-04
-- [x] `persist-best` Best in localStorage; degrades to 0 when storage is blocked
-      (Safari private mode throws on access, not just on write) — 09-04
+- [x] `persist-best` Best in localStorage; degrades to 0 when blocked — 09-04
 - [x] Endless mode: seeded RNG, chunk generator, fairness probe — 09-04
 - [x] Art pass: 8-bit backdrop, brick, particles, shake, hitstop, pig — 09-03
 - [x] KILL GATE **PASSED** — author cleared the hand-authored level — 09-03
@@ -39,11 +41,10 @@
 
 ## Notes and deferred items
 
-- **Hosting is local only.** Repo private; Pages needs public on a free plan.
-  `deploy.yml` is disabled, not deleted. Resume steps in JOURNAL.md.
+- **No hosted URL**, but the blocker is gone: repo is PUBLIC. `deploy.yml` disabled.
 - **No outside playtesters, ever.** Weaker now that content is generated.
-- `minSlackTicks` floor is 6 (50ms), not the plan's 3 — measurement overruled it.
-  "Flipfall" is a placeholder that already became the repo name.
+- `minSlackTicks` floor is 6 (50ms) in every mode; measurement overruled the plan's 3.
+- "Flipfall" and "Gauntlet" are both placeholders.
 - Codex quota resets 09-15; Claude subagent spend limit was hit mid-run.
 
 ## Escalation log — (none)

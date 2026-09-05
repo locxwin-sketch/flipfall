@@ -5,6 +5,10 @@
 
 export const PIXEL = 2
 
+/** Gold showing through the pig's belly. Matches the coin palette deliberately. */
+const PIG_FILL = '#ffd23f'
+const PIG_FILL_BRIGHT = '#fff3a0'
+
 /**
  * The pig's whole palette. Exported because `death.test.ts` guards new death styles
  * against picking debris that matches the pig — debris has to contrast with the
@@ -66,9 +70,27 @@ export const PIG_W = PIG[0]!.length
 export const PIG_H = PIG.length
 
 /**
+ * How many coins fill the pig completely. Past this the belly is simply full — the
+ * counter keeps climbing but the sprite stops changing, because an 11x11 grid runs
+ * out of belly long before a good run runs out of coins.
+ */
+export const PIG_FULL_COINS = 12
+
+/** Belly cells, bottom row first — the pig fills from the bottom, like a jar. */
+const BELLY: ReadonlyArray<readonly [number, number]> = [
+  [3, 8], [4, 8], [5, 8], [6, 8], [7, 8],
+  [3, 7], [4, 7], [6, 7], [7, 7],
+  [3, 6], [4, 6], [5, 6], [6, 6], [7, 6],
+]
+
+/**
  * Draws the pig with its feet pointing the way gravity pulls. `squash` compresses
  * along the travel axis; `flipY` is applied around the sprite's own centre so the
  * pig lands on its feet on the ceiling too.
+ *
+ * `coins` fills the snout area with gold from the bottom up. The pig is a piggy
+ * bank, and this is the only place that fact is visible while alive — without it,
+ * collecting is a number in the corner and the death spill comes out of nowhere.
  */
 export function drawPig(
   ctx: CanvasRenderingContext2D,
@@ -77,6 +99,7 @@ export function drawPig(
   w: number,
   h: number,
   gravitySign: 1 | -1,
+  coins = 0,
 ): void {
   const sx = w / (PIG_W * PIXEL)
   const sy = h / (PIG_H * PIXEL)
@@ -89,6 +112,17 @@ export function drawPig(
   for (const px of PIG_PIXELS) {
     ctx.fillStyle = px.color
     ctx.fillRect(px.dx * PIXEL, px.dy * PIXEL, PIXEL, PIXEL)
+  }
+
+  if (coins > 0) {
+    // Drawn AFTER the body, over the snout cells, so it reads as gold showing
+    // through rather than as a recoloured pig.
+    const n = Math.min(BELLY.length, Math.round((coins / PIG_FULL_COINS) * BELLY.length))
+    for (let i = 0; i < n; i++) {
+      const cell = BELLY[i]!
+      ctx.fillStyle = i === n - 1 ? PIG_FILL_BRIGHT : PIG_FILL
+      ctx.fillRect(cell[0] * PIXEL, cell[1] * PIXEL, PIXEL, PIXEL)
+    }
   }
 
   ctx.restore()

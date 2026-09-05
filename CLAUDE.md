@@ -5,9 +5,9 @@
 ## What this is
 
 Flipfall — a one-button precision game. Tap flips gravity; the player falls toward
-the new surface under real acceleration rather than snapping. Endless, seeded,
-deliberately brutal after an easy opening. Aimed at a game portal (Poki *or*
-CrazyGames — never both), not at collecting payments.
+the new surface under real acceleration, not snapping. Seeded, endless, brutal after
+an easy opening. Two modes: **Endless**, and **Gauntlet**, which opens where Endless
+tops out and adds coins and grazing. Portal-bound (Poki *or* CrazyGames, never both).
 
 ## Commands
 
@@ -16,17 +16,18 @@ npm run dev      # http://localhost:5173 — the only way to play it
 npm run build    # tsc --noEmit && vite build
 npm test         # vitest run
 npm run lint     # eslint .
-# dev-only URL params: ?seed=<n> pins the world, ?skip=<px> starts partway in
+# dev-only params: ?seed ?skip ?mode=gauntlet ?die=1 ?coins=<n> ?death=slime|coins
 ```
 
 ## Environment
 
 Node 26 (`.nvmrc`). npm, committed lockfile. No secrets, no backend, zero runtime
-dependencies. Hosting is local only; see `docs/JOURNAL.md`.
+dependencies. No hosted URL: repo is public, Pages disabled. See `docs/JOURNAL.md`.
 
 ## Architecture
 
-- `src/constants/` — physics, difficulty, feel, palette, layout. All px-per-second.
+- `src/constants/` — physics, difficulty, modes, scoring, feel, palette, layout. All
+  px-per-second. Gauntlet's `easiest` IS Endless's `hardest`; `modes.test.ts` pins it.
 - `src/lib/engine/` — fixed-timestep loop, input, seeded RNG, AABB, audio.
 - `src/lib/game/` — pure simulation. **`Math.random()` banned** (eslint-enforced);
   reproducible from a seed alone.
@@ -55,5 +56,5 @@ machine will find lines no human can fly; this game shipped a 17ms level once.
 
 ## Current state
 
-Endless mode playable, 30 tests green. Blocked on a human playtest of the
-difficulty ramp, not on code. See `docs/STATE.md`, then `docs/JOURNAL.md`.
+Both modes playable, 91 tests green. Blocked on a human playtest — of the ramp,
+and now of Gauntlet — not on code. See `docs/STATE.md`, then `docs/JOURNAL.md`.

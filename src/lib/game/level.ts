@@ -7,6 +7,26 @@ export interface Rect {
   h: number
 }
 
+/**
+ * A collectible. A Rect so it reuses the same `overlap` the hazards do, plus a
+ * stable id — the world is a memo that can evict and regenerate a chunk at any
+ * time, so "which coin is this" cannot be identity and has to be a number derived
+ * from (chunk, slot).
+ */
+export interface Coin extends Rect {
+  id: number
+}
+
+/** Coin box. Small enough to demand a real line, big enough to be catchable. */
+export const COIN_SIZE = 16
+
+/** Coin slots per chunk, and therefore the id stride. */
+export const COIN_STRIDE = 64
+
+export function coin(id: number, cx: number, cy: number): Coin {
+  return { id, x: cx - COIN_SIZE / 2, y: cy - COIN_SIZE / 2, w: COIN_SIZE, h: COIN_SIZE }
+}
+
 // --- pattern primitives ------------------------------------------------------
 // The vocabulary generator.ts assembles into an endless world. These were proven
 // first in a hand-authored 30s level (T01) so their readability was established

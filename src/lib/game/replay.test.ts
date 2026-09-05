@@ -24,7 +24,7 @@ function makeSchedule(seed: number, worldSeed = seed * 31 + 7): Replay {
     pressTicks.push(t)
     t += 6 + Math.floor(rnd() * 54)
   }
-  return { physicsVersion: PHYSICS_VERSION, seed: worldSeed, pressTicks }
+  return { physicsVersion: PHYSICS_VERSION, seed: worldSeed, mode: 'endless', pressTicks }
 }
 
 describe('replay determinism', () => {
@@ -70,12 +70,17 @@ describe('replay determinism', () => {
   })
 
   it('refuses a replay recorded under a different physics version', () => {
-    const stale: Replay = { physicsVersion: PHYSICS_VERSION + 1, seed: 1, pressTicks: [10, 20] }
+    const stale: Replay = {
+      physicsVersion: PHYSICS_VERSION + 1,
+      seed: 1,
+      mode: 'endless',
+      pressTicks: [10, 20],
+    }
     expect(() => replayRun(stale)).toThrow(/not comparable/)
   })
 
   it('a no-input run eventually dies rather than surviving forever', () => {
-    const idle: Replay = { physicsVersion: PHYSICS_VERSION, seed: 1234, pressTicks: [] }
+    const idle: Replay = { physicsVersion: PHYSICS_VERSION, seed: 1234, mode: 'endless', pressTicks: [] }
     const r = replayRun(idle)
     expect(r.deathTick).not.toBeNull()
   })

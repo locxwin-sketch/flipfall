@@ -8,6 +8,13 @@
 export const RAMP_START_PX = 1200
 export const RAMP_END_PX = 26_000
 
+// Gauntlet's ramp. Short prologue — 600px is ~1.3s at its opening speed, which is
+// two flips, and Gauntlet is not a mode anyone reaches without knowing what the
+// button does. It climbs over a shorter span than Endless because it starts at
+// Endless's ceiling: there is less distance to cover.
+export const GAUNTLET_START_PX = 600
+export const GAUNTLET_END_PX = 20_000
+
 /** Chunk width. Half a screen, so ~2 chunks are on screen at once. */
 export const CHUNK_W = 480
 
@@ -17,7 +24,7 @@ export const GEN_AHEAD_CHUNKS = 4
 export const KEEP_BEHIND_CHUNKS = 2
 
 export interface DifficultyParams {
-  /** px/s world scroll */
+  /** px/s world scroll. Must never exceed SCROLL_MAX — see physics.test.ts. */
   scrollSpeed: number
   /** how many hazard placements this chunk may contain */
   hazardCount: number
@@ -50,5 +57,23 @@ export const HARDEST: DifficultyParams = {
   // that: 25ms is below trained human timing precision and below two frames on a
   // 60Hz display. 6 ticks (50ms) is the floor this game actually ships with, and
   // level.test.ts enforces it on generated output.
+  minSlackTicks: 6,
+}
+
+/**
+ * Gauntlet's ceiling. Its FLOOR is `HARDEST` above — the second mode opens on the
+ * state Endless spends 67 seconds climbing to, which is the whole reason it exists.
+ *
+ * `minSlackTicks` deliberately does NOT drop below 6. That number is a measured
+ * property of human timing, not a difficulty dial; a harder mode is allowed to ask
+ * for more decisions, faster, but not for reactions nobody can make. Every other
+ * field here is a real knob and every one of them moves.
+ */
+export const GAUNTLET_HARDEST: DifficultyParams = {
+  scrollSpeed: 560,
+  hazardCount: 6,
+  pinchGap: 150,
+  pinchOffset: 120,
+  maxTier: 3,
   minSlackTicks: 6,
 }

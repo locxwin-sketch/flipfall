@@ -1,4 +1,5 @@
 import { FIXED_DT } from '@/constants/physics'
+import type { Mode } from '@/constants/modes'
 import { initRun, stepRun, type RunState } from './sim'
 import { World } from './world'
 
@@ -7,12 +8,18 @@ import { World } from './world'
  * replay recorded under a different version is not comparable, and silently
  * replaying it produces a wrong ghost or a wrong leaderboard entry.
  */
-export const PHYSICS_VERSION = 2
+export const PHYSICS_VERSION = 3
 
 export interface Replay {
   physicsVersion: number
   /** The world seed. The entire level is regenerated from this — none is stored. */
   seed: number
+  /**
+   * Which mode the run was played in. Part of the world's identity, not metadata:
+   * the same seed generates a different world and ramps on a different curve in
+   * each mode, so a replay without this reconstructs the wrong level entirely.
+   */
+  mode: Mode
   /** Sim ticks on which a flip was consumed. Strictly ascending. */
   pressTicks: number[]
 }
@@ -27,9 +34,11 @@ export interface ReplayResult {
 export class ReplayRecorder {
   private readonly ticks: number[] = []
   private seed = 0
+  private mode: Mode = 'endless'
 
-  start(seed: number): void {
+  start(seed: number, mode: Mode = 'endless'): void {
     this.seed = seed >>> 0
+    this.mode = mode
     this.ticks.length = 0
   }
 
@@ -38,7 +47,12 @@ export class ReplayRecorder {
   }
 
   build(): Replay {
-    return { physicsVersion: PHYSICS_VERSION, seed: this.seed, pressTicks: [...this.ticks] }
+    return {
+      physicsVersion: PHYSICS_VERSION,
+      seed: this.seed,
+      mode: this.mode,
+      pressTicks: [...this.ticks],
+    }
   }
 }
 
@@ -55,7 +69,7 @@ export function replayRun(replay: Replay, maxTicks = 120_000): ReplayResult {
     )
   }
 
-  const world = new World(replay.seed)
+  const world = new World(replay.seed, replay.mode)
   let s: RunState = initRun(world)
   let next = 0
 

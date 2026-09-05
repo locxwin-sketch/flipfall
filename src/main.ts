@@ -1,7 +1,7 @@
 // Composition root: canvas, loop, input, sim, fx, render.
 
 import './style.css'
-import { FIXED_DT, PLAYER_H, PLAYER_W } from '@/constants/physics'
+import { FIXED_DT, PLAYER_H, PLAYER_W, TICK_HZ } from '@/constants/physics'
 import { CEIL_Y, FLOOR_Y, PLAYER_X } from '@/constants/layout'
 import { PALETTE } from '@/constants/palette'
 import {
@@ -33,15 +33,24 @@ import {
   SQUASH_MS,
   TRAIL_INTERVAL_MS,
   TRAIL_LIFE_MS,
+  HOLD_SELECT_MS,
 } from '@/constants/feel'
 import { DEATH_LOOKS, DEATH_STYLE, type DeathStyle } from '@/constants/death'
+import { isMode, type Mode } from '@/constants/modes'
 import { createLoop } from '@/lib/engine/loop'
-import { bindInput, pollPress, pressQueueDepth, setInputEnabled } from '@/lib/engine/input'
+import {
+  bindInput,
+  clearQueue,
+  isHeld,
+  pollPress,
+  pressQueueDepth,
+  setInputEnabled,
+} from '@/lib/engine/input'
 import { initAudio, setMuted, sfx } from '@/lib/engine/audio'
 import { loadBest, saveBest } from '@/lib/engine/storage'
 import { World } from '@/lib/game/world'
 import { difficultyAt } from '@/lib/game/difficulty'
-import { initRun, score, stepRun, type RunState } from '@/lib/game/sim'
+import { bonusScore, initRun, score, stepRun, type RunState } from '@/lib/game/sim'
 import { ReplayRecorder } from '@/lib/game/replay'
 import { burst, clearParticles, shatter, spray, trail, updateParticles } from '@/lib/fx/particles'
 import { clearRings, ring, updateRings } from '@/lib/fx/shockwave'
@@ -65,13 +74,25 @@ function newSeed(): number {
   return (Math.random() * 0xffffffff) >>> 0
 }
 
-let world = new World(newSeed())
+/** Which mode the current world belongs to. Chosen on the title screen. */
+let mode: Mode = 'endless'
+/** Dev-only `?seed=` pin, so a restart re-rolls the same world instead of a new one. */
+let pinnedSeed: number | null = null
+
+let world = new World(newSeed(), mode)
 let run: RunState = initRun(world)
-recorder.start(world.seed)
+recorder.start(world.seed, mode)
 let prev: RunState = run
 let started = false
 let deaths = 0
-let best = loadBest()
+let best = loadBest(mode)
+
+// Title-screen mode select. A press does not start the run any more; it starts a
+// hold timer, and what happens on release decides the mode. Tap → Endless, hold
+// past HOLD_SELECT_MS → Gauntlet.
+const HOLD_SELECT_TICKS = Math.round((HOLD_SELECT_MS / 1000) * TICK_HZ)
+let selecting = false
+let selectTicks = 0
 /** Which death this build ships. Overridable in dev via ?death=. */
 let deathStyle: DeathStyle = DEATH_STYLE
 
@@ -85,11 +106,20 @@ function playerWorldX(): number {
   return run.distance + PLAYER_X + PLAYER_W / 2
 }
 
+/**
+ * Endless scores distance alone — its stored bests predate coins and grazing, and
+ * folding bonuses in would silently reprice every one of them. Gauntlet, whose
+ * bests start empty, scores the lot.
+ */
+function runScore(s: RunState): number {
+  return score(s) + (mode === 'gauntlet' ? bonusScore(s) : 0)
+}
+
 function reset(): void {
-  world = new World(newSeed())
+  world = new World(pinnedSeed ?? newSeed(), mode)
   run = initRun(world)
   prev = run
-  recorder.start(world.seed)
+  recorder.start(world.seed, mode)
   clearParticles()
   clearRings()
   clearSplatter()
@@ -97,6 +127,24 @@ function reset(): void {
   squash = 0
   flash = 0
   deathWash = 0
+}
+
+/**
+ * Commit to a mode and start. Rebuilding the world is only necessary when the mode
+ * actually changed, but it is unconditional here because the alternative is a
+ * `mode` field and a `world.mode` that can disagree — and every bug that produces
+ * looks like "the generator is broken" rather than "the world is the wrong mode".
+ */
+function begin(m: Mode): void {
+  mode = m
+  best = loadBest(mode)
+  deaths = 0
+  reset()
+  selecting = false
+  started = true
+  // The press that opened the select is spent, and on a hold the OS may have queued
+  // more behind it. Starting a precision run with a banked flip is a free death.
+  clearQueue()
 }
 
 function fixedUpdate(dt: number): void {
@@ -107,7 +155,17 @@ function fixedUpdate(dt: number): void {
   prev = run
 
   if (!started) {
-    if (pollPress()) started = true
+    if (selecting) {
+      selectTicks++
+      // Release before the threshold is a tap; reaching it is a hold. Deciding on
+      // release rather than on press is the whole reason the run does not begin on
+      // the first press any more.
+      if (!isHeld()) begin('endless')
+      else if (selectTicks >= HOLD_SELECT_TICKS) begin('gauntlet')
+    } else if (pollPress()) {
+      selecting = true
+      selectTicks = 0
+    }
     return
   }
 
@@ -135,6 +193,18 @@ function fixedUpdate(dt: number): void {
     spray(playerWorldX(), next.player.y + (dir === -1 ? PLAYER_H : 0), LAND_BURST, dir, 150, 240, PALETTE.cloud)
   }
 
+  if (next.grazes > run.grazes) {
+    sfx.graze()
+    shake(SHAKE_FLIP_PX, SHAKE_FLIP_MS)
+  }
+
+  if (next.coins > run.coins) {
+    sfx.coin()
+    // A small gold puff where the coin was, so the pickup registers even when the
+    // player's eyes are on the next gap rather than on the counter.
+    burst(playerWorldX(), next.player.y + PLAYER_H / 2, 6, 170, 300, PALETTE.coinBright, 3, 260)
+  }
+
   if (next.dead && !run.dead) {
     deaths++
     sfx.die()
@@ -143,14 +213,14 @@ function fixedUpdate(dt: number): void {
     flash = 1
     deathWash = 1
 
-    spawnDeathFx(playerWorldX(), next.player.y + PLAYER_H / 2)
+    spawnDeathFx(playerWorldX(), next.player.y + PLAYER_H / 2, next.coins)
 
     // Only touch storage when the number actually moved. Most deaths are not
     // personal bests, and a write per death is a write per few seconds.
-    const final = score(next)
+    const final = runScore(next)
     if (final > best) {
       best = final
-      saveBest(best)
+      saveBest(best, mode)
     }
   }
 
@@ -163,7 +233,7 @@ function fixedUpdate(dt: number): void {
  * otherwise unreachable without actually dying, and this is the effect most in need
  * of being looked at.
  */
-function spawnDeathFx(cx: number, y: number): void {
+function spawnDeathFx(cx: number, y: number, coins = 0): void {
   const look = DEATH_LOOKS[deathStyle]
   const cy = y
 
@@ -196,6 +266,20 @@ function spawnDeathFx(cx: number, y: number): void {
   // the mechanic, which is why it reads as smoke, or as banknotes.
   burst(cx, cy, SMOKE_PUFFS, 90, 780, look.drift, 6, -140)
   burst(cx, cy, DEATH_BURST, 300, 520, look.spark, 3, 800)
+
+  // The savings. Independent of DEATH_STYLE on purpose: whether the pig bursts into
+  // slime or into confetti, what it was carrying comes out too, and the size of the
+  // spray is exactly what the run earned. A run that collected nothing spills
+  // nothing — the effect reports the run rather than decorating it.
+  if (coins > 0) {
+    const n = Math.min(60, coins * 3)
+    // Sized to compete with the death debris rather than the world: a coin fleck
+    // at 3px reads as dust next to a slime chunk. This is a static contrast call
+    // and safe to make from a still — the SPREAD and timing are not, and have not
+    // been touched.
+    burst(cx, cy, n, 380, 1100, PALETTE.coin, 5, 900, true)
+    burst(cx, cy, Math.round(n * 0.4), 300, 1200, PALETTE.coinBright, 4, 780, true)
+  }
 
   // And the lens takes it. Screen space, so the origin is the player's fixed
   // on-screen x, NOT the world x used by everything above — the pig is always at
@@ -238,7 +322,10 @@ function draw(alpha: number, frameDt: number): void {
     queueDepth: pressQueueDepth(),
     dead: run.dead,
     started,
-    difficulty: difficultyAt(run.distance),
+    difficulty: difficultyAt(run.distance, world.curve),
+    mode,
+    total: runScore(run),
+    holdProgress: selecting ? Math.min(1, selectTicks / HOLD_SELECT_TICKS) : 0,
     squash,
     flash,
     deathWash,
@@ -251,12 +338,25 @@ function draw(alpha: number, frameDt: number): void {
 // reviewed without playing to 24s every time. Never reachable in a production build.
 if (import.meta.env.DEV) {
   const q = new URLSearchParams(location.search)
+
+  // ?mode=gauntlet — reach the second mode without holding the button. Without
+  // this, Gauntlet can only be entered by a gesture, which makes every screenshot
+  // and bug report against it awkward to reproduce.
+  const modeParam = q.get('mode')
+  if (isMode(modeParam)) {
+    mode = modeParam
+    best = loadBest(mode)
+  }
+
   const fixedSeed = Number(q.get('seed'))
   if (Number.isFinite(fixedSeed) && q.has('seed')) {
-    world = new World(fixedSeed)
+    pinnedSeed = fixedSeed >>> 0
+  }
+  if (pinnedSeed !== null || isMode(modeParam)) {
+    world = new World(pinnedSeed ?? world.seed, mode)
     run = initRun(world)
     prev = run
-    recorder.start(world.seed)
+    recorder.start(world.seed, mode)
   }
   const skip = Number(q.get('skip'))
   if (Number.isFinite(skip) && skip > 0) {
@@ -277,7 +377,11 @@ if (import.meta.env.DEV) {
   if (styleParam === 'coins' || styleParam === 'slime') deathStyle = styleParam
   if (q.get('die') === '1') {
     started = true
-    spawnDeathFx(playerWorldX(), run.player.y + PLAYER_H / 2)
+    // A death with no coins spills no coins, which makes the default preview
+    // misleading. `?coins=<n>` seeds a purse so the spill can actually be judged.
+    const previewCoins = Number(q.get('coins') ?? 8)
+    run = { ...run, coins: Number.isFinite(previewCoins) ? previewCoins : 8 }
+    spawnDeathFx(playerWorldX(), run.player.y + PLAYER_H / 2, run.coins)
     // Set the dead flag too, so the still shows what a death actually looks like —
     // wash and vignette included — rather than only the particle layer.
     flash = 1
@@ -320,6 +424,9 @@ if (import.meta.env.DEV) {
       get seed() {
         return world.seed
       },
+      get mode() {
+        return world.mode
+      },
       get chunks() {
         return world.cachedChunks
       },
@@ -327,7 +434,7 @@ if (import.meta.env.DEV) {
       /** Fires the death fx where the player currently is, without dying. For
        *  headless screenshots: the death effects are otherwise unreachable
        *  without playing into a hazard, which cannot be scripted. */
-      kill: () => spawnDeathFx(playerWorldX(), run.player.y + PLAYER_H / 2),
+      kill: () => spawnDeathFx(playerWorldX(), run.player.y + PLAYER_H / 2, run.coins),
       fixedDt: FIXED_DT,
     },
   })

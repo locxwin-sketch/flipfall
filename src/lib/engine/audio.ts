@@ -52,4 +52,11 @@ export const sfx = {
   flip: (): void => tone(420, 0.06, 'square', 0.05, 700),
   land: (): void => tone(180, 0.05, 'sine', 0.05),
   die: (): void => tone(300, 0.45, 'sawtooth', 0.11, 40),
+  // Rising, short and quiet. It fires several times a second in a good run, so
+  // anything longer or louder than the flip it accompanies becomes a nuisance fast.
+  coin: (): void => tone(880, 0.07, 'square', 0.035, 1320),
+  // Very short, very quiet, and high enough to sit above the flip without masking
+  // it. A graze happens at the exact moment the player is busiest; the sound has to
+  // register as "that was close" without competing for attention with the gap.
+  graze: (): void => tone(1560, 0.04, 'sine', 0.03, 1980),
 }

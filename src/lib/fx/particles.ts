@@ -17,6 +17,18 @@ interface Particle {
   size: number
   color: string
   gravity: number
+  /**
+   * Draw above the full-frame death wash instead of under it.
+   *
+   * The wash is a 0.52-alpha tint over the entire frame, which is correct for
+   * scenery and wrong for anything carrying information. The spilled coins are a
+   * readout of what the run earned, and under the slime wash they turned olive and
+   * vanished into the debris — the same disappearing-colour trap already recorded
+   * three times in docs/JOURNAL.md, arriving this time via a tint rather than the
+   * backdrop. Recolouring cannot fix it; anything gold under a heavy green wash
+   * goes green. Layering can.
+   */
+  above: boolean
 }
 
 const pool: Particle[] = Array.from({ length: MAX }, () => ({
@@ -29,6 +41,7 @@ const pool: Particle[] = Array.from({ length: MAX }, () => ({
   size: 0,
   color: '#fff',
   gravity: 0,
+  above: false,
 }))
 let cursor = 0
 
@@ -41,6 +54,7 @@ function spawn(
   size: number,
   color: string,
   gravity = 0,
+  above = false,
 ): void {
   // Ring buffer: oldest particle is recycled. Never allocates, never grows.
   const p = pool[cursor]
@@ -54,6 +68,7 @@ function spawn(
   p.size = size
   p.color = color
   p.gravity = gravity
+  p.above = above
 }
 
 export function clearParticles(): void {
@@ -70,11 +85,22 @@ export function burst(
   color: string,
   size = 3,
   gravity = 0,
+  above = false,
 ): void {
   for (let i = 0; i < count; i++) {
     const a = (Math.PI * 2 * i) / count + Math.random() * 0.5
     const s = speed * (0.45 + Math.random() * 0.75)
-    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s, lifeMs * (0.6 + Math.random() * 0.6), size, color, gravity)
+    spawn(
+      x,
+      y,
+      Math.cos(a) * s,
+      Math.sin(a) * s,
+      lifeMs * (0.6 + Math.random() * 0.6),
+      size,
+      color,
+      gravity,
+      above,
+    )
   }
 }
 
@@ -156,9 +182,10 @@ export function updateParticles(dt: number): void {
 }
 
 /** Draws in world coordinates — call inside the camera transform. */
-export function drawParticles(ctx: CanvasRenderingContext2D): void {
+/** Pass `above` to draw only the layer that sits over the death wash. */
+export function drawParticles(ctx: CanvasRenderingContext2D, above = false): void {
   for (const p of pool) {
-    if (p.life <= 0) continue
+    if (p.life <= 0 || p.above !== above) continue
     const t = p.life / p.maxLife
     ctx.globalAlpha = t * t
     ctx.fillStyle = p.color

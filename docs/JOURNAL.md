@@ -4,29 +4,36 @@
      so every agent invocation stays cheap; this file is the opposite — it is the
      long-form record a human (or a fresh session) reads once when resuming. -->
 
-Last updated: 2026-09-04. Branch: `feature/pig-explosion`. HEAD `c688af7`.
+Last updated: 2026-09-05. Branch: `main`. HEAD `8411f69`.
 
 ## Where to start
 
 ```bash
 npm install
 npm run dev          # http://localhost:5173  — this is the only way to play it
-npm test             # 30 tests, ~10s (the fairness probes dominate)
+npm test             # 91 tests, ~3s (the fairness probes still dominate)
 npm run build        # tsc --noEmit && vite build
 npm run lint
 ```
 
 There is **no hosted URL**. It was live on GitHub Pages twice; the repo then became
 private, which disables Pages on a free plan. `.github/workflows/deploy.yml` is
-correct and **disabled, not deleted**. To bring it back:
+correct and **disabled, not deleted**.
+
+**The repo is public again as of 2026-09-05** — `gh repo view` reports `PUBLIC`, so
+the blocker this section described for two days no longer exists. What remains:
 
 ```bash
-gh repo edit locxwin-sketch/flipfall --visibility public
 gh api -X POST repos/locxwin-sketch/flipfall/pages -f build_type=workflow
 gh workflow enable "Deploy to Pages"
 ```
 
-That is a public-exposure decision, not a technical one.
+Still a public-exposure decision, not a technical one — but the exposure has already
+happened, so the remaining choice is only whether the *game* is reachable.
+
+Note the last two runs in `gh run list` show `failure`. Those are the pre-rollback
+fairness-timeout runs from 09-03 that `42b52ea` fixed; the fix has never run in CI
+because the workflow was disabled immediately afterwards. Expect green, verify by SHA.
 
 ## Dev affordances worth knowing
 
@@ -40,6 +47,10 @@ Both are `import.meta.env.DEV`-gated and cannot reach a production build.
   the whole death: splatter, wash, vignette, taunt. `--screenshot` cannot run JS,
   which is why this is a URL param and not just `__game.kill()`.
 - `?death=slime|coins` — previews either death style without editing the constant.
+- `?mode=gauntlet` — the second mode without holding the button. Gauntlet is
+  otherwise reachable only by a gesture, which makes bug reports against it awkward.
+- `?coins=<n>` — seeds a purse before `?die=1`, so the coin spill is actually in the
+  still. Defaults to 8; a death with no coins correctly spills nothing.
 - `window.__game` — live `run`, `ticksPerSecond`, `queueDepth`, `seed`, `chunks`,
   `replay()`, and `kill()` (fires the death fx in place, without dying).
 
@@ -71,7 +82,9 @@ Each of these is a deliberate departure. Do not "restore" them without re-readin
 3. **The hand-authored 30s level is deleted.** It was a fixture to answer "does
    flipping gravity feel good". It got cleared, so it had done its job; its
    primitives are now the generator's pattern vocabulary.
-4. **Content model is endless, not staged.** Chosen after the kill gate passed.
+4. **Content model is endless, not staged** — and as of 09-05 that is half true.
+   There are two MODES, but neither is staged: each is one continuous curve with no
+   acts, gates or zones. A mode is a curve plus a seed salt, not a chapter.
 5. **The difficulty curve eases OUT, not in — this reverses decision 1's sibling.**
    The ramp used to smoothstep (ease-in) from 2600px on the theory that a flat first
    stretch reads as a gentle opening. Playtest on 09-04 called it a drag, and the
@@ -87,6 +100,46 @@ Each of these is a deliberate departure. Do not "restore" them without re-readin
    business decision again rather than an art one.
 7. **Art came before the portal work,** not at T10a as planned, because it was asked
    for. No portal adapter exists yet.
+7b. **A second mode arrived before the portal work too,** and for the same reason.
+   Gauntlet is not a difficulty setting bolted on: its curve's `easiest` IS Endless's
+   `hardest`, so the two are continuous and the second mode opens on the state the
+   first spends ~67s climbing to. That join is the design, and `modes.test.ts` pins
+   it — retune `HARDEST` without touching `GAUNTLET_CURVE` and Gauntlet silently
+   stops being a continuation. Endless salts to seed 0 so its seed→world mapping is
+   byte-identical to what it was before modes existed; every screenshot and bug
+   report taken so far still means what it said.
+8. **There is no `src/lib/game/solver.ts`, and there never was.** The plan's T04
+   specified a BFS reachability solver running *at generation time*, re-rolling any
+   chunk that failed the margin requirement and emitting `SAFE_CHUNK` on overflow.
+   None of that exists: `grep` finds no `SAFE_CHUNK` and no re-roll anywhere in
+   `src/`. What shipped instead is a hand-authored pattern vocabulary that is fair
+   *by construction*, with a beam-search probe living entirely in
+   `generator.test.ts` that asserts it after the fact. This is arguably the better
+   trade — a pattern lookup cannot hitch a frame the way a BFS can, which is also
+   why the plan's "measure the generation budget on a real Android" never happened
+   and no longer matters. But it is a **different guarantee** from the one that was
+   approved: generated content is checked, not repaired. A pattern that failed the
+   probe would ship broken and turn a test red rather than degrading to a safe
+   chunk at runtime. Worth naming because the plan called that file "where the
+   fairness guarantee is real or fake".
+9. **`hazardCount` was lerped and asserted but never read — now fixed;
+   `minSlackTicks` still is not.** For two days both sat in `DifficultyParams`,
+   were interpolated in `paramsAt`, and were asserted in `difficulty.test.ts` /
+   `generator.test.ts` while no production code path consumed either. Density was
+   emergent: however many rects the tier pool's chosen pattern happened to emit.
+   This means decision 5's stated reasoning ("because `hazardCount` and `maxTier`
+   are rounded…") was half wrong — only `maxTier` and the continuous pinch params
+   shaped content. The playtest conclusion held; the mechanism was mis-described.
+
+   As of 09-05 `hazardCount` is real: `addFiller` tops a chunk up to that many
+   PLACEMENTS (a pinch counts as one, because that is what the player reads it as)
+   with lone spikes, spaced at least `FILLER_SPACING` from anything already there.
+   The fairness probe passed unchanged in both modes, which is the only reason it
+   shipped. **One thing this broke and had to be fixed immediately: filler was
+   filling the `empty` pattern**, whose entire job is to be a breather. A ceiling
+   turned into a quota and the game lost its rhythm. Patterns can now declare
+   `breather: true` and are exempt. `minSlackTicks` remains deliberately test-only —
+   it is a contract on generated output, not an input to it.
 
 ## Traps already paid for
 
@@ -112,6 +165,18 @@ Each of these is a deliberate departure. Do not "restore" them without re-readin
   The backdrop is full of greens, and every natural slime colour fails the check:
   emerald measures 32 against hillFar, forest green 40 against bushDark. Shifting
   hard toward yellow was the only way green debris stays visible over a green world.
+- **A full-frame wash hides information just as effectively as a bad backdrop
+  colour.** The coin spill on death was invisible under the slime style and obvious
+  under the coins style — same particles, same code path. Cause: the death wash is a
+  0.52-alpha green tint over the entire frame, and gold under it goes olive. This is
+  the disappearing-colour trap again, arriving through a tint rather than the
+  backdrop, and the usual fix does not apply: no gold survives a heavy green wash, so
+  recolouring cannot work. Layering can. Particles now carry an `above` flag and are
+  drawn in a second world-space pass after the wash — the same reasoning that already
+  put the lens splatter in front of the vignette. **The rule generalises: anything
+  that reports what the run earned belongs above the wash; only scenery belongs
+  under it.**
+
 - **Never `clearRect` to shape a sprite.** The lens debris is drawn over the world,
   so punching a notch out of a confetti flake with `clearRect` erased the scenery
   behind it. Irregular silhouettes have to be built additively.

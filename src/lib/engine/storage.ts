@@ -7,7 +7,18 @@
 // does the same. A game that cannot save a score still has to be playable, so every
 // failure here degrades to "no saved best" and never propagates.
 
-const KEY = 'flipfall.best.v1'
+import type { Mode } from '@/constants/modes'
+
+/**
+ * Per mode, because the two modes are not comparable: Gauntlet opens at the speed
+ * Endless spends a minute reaching, so one shared "best" would be won permanently
+ * by whichever mode happens to score faster and would stop meaning anything in
+ * either. Endless keeps the original unsuffixed key so nobody loses the best they
+ * already have.
+ */
+function keyFor(mode: Mode): string {
+  return mode === 'endless' ? 'flipfall.best.v1' : `flipfall.best.${mode}.v1`
+}
 
 function store(): Storage | null {
   try {
@@ -18,9 +29,9 @@ function store(): Storage | null {
 }
 
 /** Returns 0 when nothing is stored, storage is unavailable, or the value is junk. */
-export function loadBest(): number {
+export function loadBest(mode: Mode = 'endless'): number {
   try {
-    const raw = store()?.getItem(KEY)
+    const raw = store()?.getItem(keyFor(mode))
     if (raw === null || raw === undefined) return 0
     const n = Number(raw)
     // A hand-edited or corrupted entry must not poison the HUD with NaN or a
@@ -32,10 +43,10 @@ export function loadBest(): number {
   }
 }
 
-export function saveBest(value: number): void {
+export function saveBest(value: number, mode: Mode = 'endless'): void {
   if (!Number.isFinite(value) || value < 0) return
   try {
-    store()?.setItem(KEY, String(Math.floor(value)))
+    store()?.setItem(keyFor(mode), String(Math.floor(value)))
   } catch {
     // Quota exceeded, or storage disabled mid-session. Nothing to do and nothing
     // worth telling the player about.

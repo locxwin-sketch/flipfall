@@ -37,8 +37,14 @@ export const HITBOX_INSET = 3
 
 // --- world ------------------------------------------------------------------
 
+// These two are the SPEED ENVELOPE every difficulty curve must fit inside, not the
+// speeds any mode actually uses — those live in the curves in constants/modes.ts.
+// SCROLL_MAX read 520 for a while and no curve had ever reached it; the number was
+// decorative, and the anti-tunnel invariant below was quietly being asserted against
+// a speed the game could not produce. `modes.test.ts` now pins every curve's
+// endpoints inside this envelope, which is what makes the invariant mean something.
 export const SCROLL_START = 260
-export const SCROLL_MAX = 520
+export const SCROLL_MAX = 560
 
 /**
  * Anti-tunnel invariant, asserted in collide.test.ts:

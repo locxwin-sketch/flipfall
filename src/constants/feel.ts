@@ -5,6 +5,15 @@
  * Sim frozen, render continues — the cheapest "expensive game" signal there is.
  * Death gets a long one because the beat before the bang is what sells the bang.
  */
+/**
+ * How long the button must be held on the title screen to start Gauntlet instead of
+ * Endless. 400ms is long enough that a normal impatient tap never trips it, short
+ * enough that holding does not feel like it has failed. The title draws a filling
+ * bar over this window — a hidden gesture nobody discovers is the same as no
+ * second mode at all.
+ */
+export const HOLD_SELECT_MS = 400
+
 export const HITSTOP_DEATH_MS = 150
 
 export const SHAKE_DEATH_PX = 16

@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { FIXED_DT, PLAYER_H, TICK_HZ } from '@/constants/physics'
 import { CEIL_Y, FLOOR_Y } from '@/constants/layout'
-import { CHUNK_W } from '@/constants/difficulty'
+import { CHUNK_W, GAUNTLET_END_PX } from '@/constants/difficulty'
 import { generateChunk } from './generator'
 import { difficultyAt, paramsAt } from './difficulty'
 import { World } from './world'
 import { hitbox, initRun, stepRun, type RunState } from './sim'
+import { ENDLESS_CURVE, type Mode } from '@/constants/modes'
 
 const CORRIDOR_MID = (CEIL_Y + FLOOR_Y) / 2
 
@@ -145,32 +146,32 @@ describe('generateChunk', () => {
   it('is deterministic — same (index, seed) gives a deep-equal chunk', () => {
     for (const seed of [1, 99, 123456]) {
       for (const i of [2, 7, 40, 400]) {
-        expect(generateChunk(i, seed)).toEqual(generateChunk(i, seed))
+        expect(generateChunk(i, seed, ENDLESS_CURVE)).toEqual(generateChunk(i, seed, ENDLESS_CURVE))
       }
     }
   })
 
   it('does not depend on neighbours having been generated first', () => {
-    const forward = generateChunk(30, 7)
-    for (let i = 0; i < 30; i++) generateChunk(i, 7)
-    expect(generateChunk(30, 7)).toEqual(forward)
+    const forward = generateChunk(30, 7, ENDLESS_CURVE)
+    for (let i = 0; i < 30; i++) generateChunk(i, 7, ENDLESS_CURVE)
+    expect(generateChunk(30, 7, ENDLESS_CURVE)).toEqual(forward)
   })
 
   it('gives different seeds different worlds', () => {
-    const a = Array.from({ length: 30 }, (_, i) => generateChunk(i + 2, 1).patternId).join()
-    const b = Array.from({ length: 30 }, (_, i) => generateChunk(i + 2, 2).patternId).join()
+    const a = Array.from({ length: 30 }, (_, i) => generateChunk(i + 2, 1, ENDLESS_CURVE).patternId).join()
+    const b = Array.from({ length: 30 }, (_, i) => generateChunk(i + 2, 2, ENDLESS_CURVE).patternId).join()
     expect(a).not.toBe(b)
   })
 
   it('opens with two empty chunks, so nobody dies before understanding the button', () => {
-    expect(generateChunk(0, 5).hazards).toHaveLength(0)
-    expect(generateChunk(1, 5).hazards).toHaveLength(0)
+    expect(generateChunk(0, 5, ENDLESS_CURVE).hazards).toHaveLength(0)
+    expect(generateChunk(1, 5, ENDLESS_CURVE).hazards).toHaveLength(0)
   })
 
   it('keeps every hazard inside the corridor and inside its own chunk', () => {
     for (let seed = 1; seed <= 20; seed++) {
       for (let i = 0; i < 60; i++) {
-        const c = generateChunk(i, seed)
+        const c = generateChunk(i, seed, ENDLESS_CURVE)
         for (const h of c.hazards) {
           expect(h.y).toBeGreaterThanOrEqual(CEIL_Y)
           expect(h.y + h.h).toBeLessThanOrEqual(FLOOR_Y)
@@ -185,7 +186,7 @@ describe('generateChunk', () => {
     for (let seed = 1; seed <= 20; seed++) {
       for (let i = 0; i < 80; i++) {
         const byX = new Map<number, { top: number; bottom: number }>()
-        for (const h of generateChunk(i, seed).hazards) {
+        for (const h of generateChunk(i, seed, ENDLESS_CURVE).hazards) {
           const cur = byX.get(h.x) ?? { top: CEIL_Y, bottom: FLOOR_Y }
           if (h.y <= CEIL_Y) cur.top = Math.max(cur.top, h.y + h.h)
           else cur.bottom = Math.min(cur.bottom, h.y)
@@ -205,8 +206,8 @@ describe('generateChunk', () => {
       let maxRun = 1
       let run = 1
       for (let i = 3; i < 120; i++) {
-        const a = generateChunk(i - 1, seed).patternId
-        const b = generateChunk(i, seed).patternId
+        const a = generateChunk(i - 1, seed, ENDLESS_CURVE).patternId
+        const b = generateChunk(i, seed, ENDLESS_CURVE).patternId
         run = a === b ? run + 1 : 1
         maxRun = Math.max(maxRun, run)
       }
@@ -219,7 +220,7 @@ describe('difficulty curve', () => {
   it('is monotonic and bounded', () => {
     let last = -1
     for (let x = 0; x <= 40_000; x += 250) {
-      const d = difficultyAt(x)
+      const d = difficultyAt(x, ENDLESS_CURVE)
       expect(d).toBeGreaterThanOrEqual(last)
       expect(d).toBeGreaterThanOrEqual(0)
       expect(d).toBeLessThanOrEqual(1)
@@ -230,15 +231,15 @@ describe('difficulty curve', () => {
   it('keeps the first ten seconds genuinely easy', () => {
     // 10s at the opening scroll speed. The product promise, as an assertion.
     //
-    // This used to read `difficultyAt(at10s) < 0.05`. That threshold was a proxy
+    // This used to read `difficultyAt(at10s, ENDLESS_CURVE) < 0.05`. That threshold was a proxy
     // for the promise, calibrated against the old ease-IN curve, and when playtest
     // replaced that curve with an ease-out the proxy failed while the promise it
     // stood for did not: at 10s the player still meets one hazard, tier 0, and
     // over 100ms of slack. So the promise is now asserted as the content the
     // player actually faces, which no future reshaping of the curve can drift away
     // from silently.
-    const at10s = paramsAt(0).scrollSpeed * 10
-    const p = paramsAt(difficultyAt(at10s))
+    const at10s = paramsAt(0, ENDLESS_CURVE).scrollSpeed * 10
+    const p = paramsAt(difficultyAt(at10s, ENDLESS_CURVE), ENDLESS_CURVE)
     expect(p.hazardCount).toBe(1)
     expect(p.maxTier).toBe(0)
     // 12 ticks = 100ms, comfortably above the 6-tick (50ms) human floor.
@@ -248,23 +249,28 @@ describe('difficulty curve', () => {
 
   it('never asks for timing tighter than the human floor', () => {
     for (let d = 0; d <= 1.0001; d += 0.05) {
-      expect(paramsAt(Math.min(1, d)).minSlackTicks).toBeGreaterThanOrEqual(6)
+      expect(paramsAt(Math.min(1, d), ENDLESS_CURVE).minSlackTicks).toBeGreaterThanOrEqual(6)
     }
   })
 })
 
 describe('generated worlds are survivable with human timing', () => {
-  // Three windows: the easy opening, the mid ramp, and deep into the hard end.
-  const WINDOWS = [
-    { name: 'opening', start: 0, span: CHUNK_W * 6 },
-    { name: 'mid-ramp', start: 9_000, span: CHUNK_W * 6 },
-    { name: 'hard', start: 26_000, span: CHUNK_W * 6 },
+  // Endless: the easy opening, the mid ramp, and deep into the hard end.
+  // Gauntlet: its own opening and its own hard end — a second mode with no probe
+  // window of its own would ship with no fairness guarantee at all, which is
+  // exactly the failure this whole probe exists to prevent.
+  const WINDOWS: Array<{ name: string; mode: Mode; start: number; span: number }> = [
+    { name: 'opening', mode: 'endless', start: 0, span: CHUNK_W * 6 },
+    { name: 'mid-ramp', mode: 'endless', start: 9_000, span: CHUNK_W * 6 },
+    { name: 'hard', mode: 'endless', start: 26_000, span: CHUNK_W * 6 },
+    { name: 'gauntlet-opening', mode: 'gauntlet', start: 0, span: CHUNK_W * 6 },
+    { name: 'gauntlet-hard', mode: 'gauntlet', start: GAUNTLET_END_PX, span: CHUNK_W * 6 },
   ]
 
   for (const w of WINDOWS) {
     it(`${w.name}: a forgiving line exists across 4 seeds`, () => {
       for (let seed = 1; seed <= 4; seed++) {
-        const world = new World(seed * 7919 + 3)
+        const world = new World(seed * 7919 + 3, w.mode)
         const probe = probeWindow(world, w.start, w.span)
         expect(
           probe.survived,

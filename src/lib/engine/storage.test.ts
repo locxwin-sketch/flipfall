@@ -89,3 +89,30 @@ describe('best score persistence', () => {
     expect(loadBest()).toBe(100)
   })
 })
+
+describe('per-mode bests', () => {
+  it('keeps the two modes on separate keys', () => {
+    install(fakeStorage())
+    saveBest(100, 'endless')
+    saveBest(999, 'gauntlet')
+    expect(loadBest('endless')).toBe(100)
+    expect(loadBest('gauntlet')).toBe(999)
+  })
+
+  it('leaves Endless on the original key, so existing bests survive the split', () => {
+    // A player who has been at this for two days has a number under the old key.
+    // Renaming it would silently reset them to zero, which reads as a bug.
+    install(fakeStorage({ 'flipfall.best.v1': '4242' }))
+    expect(loadBest('endless')).toBe(4242)
+    expect(loadBest()).toBe(4242)
+    expect(loadBest('gauntlet')).toBe(0)
+  })
+
+  it('degrades to 0 per mode when storage is unavailable', () => {
+    install(() => {
+      throw new Error('blocked')
+    })
+    expect(loadBest('gauntlet')).toBe(0)
+    expect(() => saveBest(5, 'gauntlet')).not.toThrow()
+  })
+})

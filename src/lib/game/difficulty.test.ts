@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { FIXED_DT } from '@/constants/physics'
 import { RAMP_END_PX, RAMP_START_PX } from '@/constants/difficulty'
 import { difficultyAt, paramsAt, scrollSpeedAt } from './difficulty'
+import { ENDLESS_CURVE } from '@/constants/modes'
 
 /**
  * Distance is not time: scroll speed is itself a function of difficulty, so "what
@@ -11,8 +12,8 @@ import { difficultyAt, paramsAt, scrollSpeedAt } from './difficulty'
 function walk(seconds: number): { distance: number; difficulty: number } {
   let distance = 0
   const steps = Math.round(seconds / FIXED_DT)
-  for (let i = 0; i < steps; i++) distance += scrollSpeedAt(distance) * FIXED_DT
-  return { distance, difficulty: difficultyAt(distance) }
+  for (let i = 0; i < steps; i++) distance += scrollSpeedAt(distance, ENDLESS_CURVE) * FIXED_DT
+  return { distance, difficulty: difficultyAt(distance, ENDLESS_CURVE) }
 }
 
 /** First moment, in seconds, at which a predicate over the params holds. */
@@ -20,24 +21,24 @@ function firstTimeWhen(pred: (p: ReturnType<typeof paramsAt>) => boolean, limit 
   let distance = 0
   const steps = Math.round(limit / FIXED_DT)
   for (let i = 0; i < steps; i++) {
-    if (pred(paramsAt(difficultyAt(distance)))) return i * FIXED_DT
-    distance += scrollSpeedAt(distance) * FIXED_DT
+    if (pred(paramsAt(difficultyAt(distance, ENDLESS_CURVE), ENDLESS_CURVE))) return i * FIXED_DT
+    distance += scrollSpeedAt(distance, ENDLESS_CURVE) * FIXED_DT
   }
   return Number.POSITIVE_INFINITY
 }
 
 describe('difficultyAt', () => {
   it('is 0 through the opening and 1 past the end', () => {
-    expect(difficultyAt(0)).toBe(0)
-    expect(difficultyAt(RAMP_START_PX)).toBe(0)
-    expect(difficultyAt(RAMP_END_PX)).toBe(1)
-    expect(difficultyAt(RAMP_END_PX * 10)).toBe(1)
+    expect(difficultyAt(0, ENDLESS_CURVE)).toBe(0)
+    expect(difficultyAt(RAMP_START_PX, ENDLESS_CURVE)).toBe(0)
+    expect(difficultyAt(RAMP_END_PX, ENDLESS_CURVE)).toBe(1)
+    expect(difficultyAt(RAMP_END_PX * 10, ENDLESS_CURVE)).toBe(1)
   })
 
   it('is monotonic', () => {
     let prev = -1
     for (let d = 0; d <= RAMP_END_PX + 2000; d += 250) {
-      const cur = difficultyAt(d)
+      const cur = difficultyAt(d, ENDLESS_CURVE)
       expect(cur).toBeGreaterThanOrEqual(prev)
       prev = cur
     }
@@ -45,7 +46,7 @@ describe('difficultyAt', () => {
 
   it('stays in [0,1]', () => {
     for (let d = 0; d <= RAMP_END_PX + 2000; d += 137) {
-      const v = difficultyAt(d)
+      const v = difficultyAt(d, ENDLESS_CURVE)
       expect(v).toBeGreaterThanOrEqual(0)
       expect(v).toBeLessThanOrEqual(1)
     }
@@ -86,8 +87,8 @@ describe('the ramp as actually experienced (playtested 2026-09-04)', () => {
 
 describe('paramsAt', () => {
   it('interpolates every field monotonically from easiest to hardest', () => {
-    const a = paramsAt(0)
-    const b = paramsAt(1)
+    const a = paramsAt(0, ENDLESS_CURVE)
+    const b = paramsAt(1, ENDLESS_CURVE)
     expect(a.scrollSpeed).toBeLessThan(b.scrollSpeed)
     expect(a.hazardCount).toBeLessThan(b.hazardCount)
     expect(a.pinchGap).toBeGreaterThan(b.pinchGap)
