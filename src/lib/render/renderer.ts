@@ -11,7 +11,7 @@ import { drawPig } from './sprites'
 import { motionScale, shakeOffset } from '@/lib/fx/shake'
 import type { Coin, Rect } from '@/lib/game/level'
 import type { World } from '@/lib/game/world'
-import type { RunState } from '@/lib/game/sim'
+import { flowMultiplier, type RunState } from '@/lib/game/sim'
 
 export interface HudInfo {
   ticksPerSecond: number
@@ -279,7 +279,15 @@ function drawHud(ctx: CanvasRenderingContext2D, s: RunState, hud: HudInfo): void
     text(ctx, `coins ${s.coins}`, 20, row, PALETTE.coin)
     row += 18
   }
-  if (s.grazes > 0) text(ctx, `close calls ${s.grazes}`, 20, row, PALETTE.hazardTip)
+  if (s.grazes > 0) {
+    text(ctx, `close calls ${s.grazes}`, 20, row, PALETTE.hazardTip)
+    row += 18
+  }
+  // Gauntlet-only: the multiplier does nothing to Endless's score, so showing it
+  // there would read as "your score is being multiplied" when it flatly is not.
+  if (hud.mode !== 'endless' && s.flow > 0) {
+    text(ctx, `flow x${flowMultiplier(s.flow).toFixed(1)}`, 20, row, PALETTE.coinBright)
+  }
 
   ctx.textAlign = 'right'
   text(ctx, `${hud.ticksPerSecond} tick/s`, VIEW_W - 20, 34, PALETTE.hudMuted)

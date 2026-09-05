@@ -9,8 +9,8 @@
 
 ## Now
 
-- [ ] `playtest-gauntlet` Play BOTH modes — tap = Endless, hold = Gauntlet. Nothing
-      since 09-03 seen in motion. `?mode=gauntlet` `?die=1&coins=10` `?death=coins`
+- [ ] `playtest-gauntlet` Play BOTH modes (tap/hold). Ramp, deaths, coins, Flow —
+      nothing since 09-03 seen in motion. `?mode=gauntlet`
 
 ## Next (in dependency order)
 
@@ -25,14 +25,15 @@
 
 ## Done
 
+- [x] `flow` Combo multiplier: streak of near-misses multiplies coins/grazes,
+      resets on landing not a timer. Codex's first design (pay a graze out only
+      later, on a coin) was rejected — see JOURNAL. 91 → 98 tests — 09-05
 - [x] `gauntlet-a` Second mode, hold-to-start. Per-mode curves and bests, coins,
       near-miss grazing, coin-spill death, rotating taunts, `hazardCount` made
       real. Fairness probe extended to cover it. 62 → 91 tests — 09-05
-- [x] `death-styles` `DEATH_STYLE` picks slime or coins; shared timings, only
-      colour and shape differ — 09-04
-- [x] `judge-explosion` PASSED on timing, then made wetter: splatter, rings — 09-04
-- [x] `playtest-ramp` ANSWERED "flat opening drags". Ease-in → ease-out,
-      RAMP_START_PX 2600 → 1200; asserted in `difficulty.test.ts` — 09-04
+- [x] `death-styles`/`judge-explosion` DEATH_STYLE slime/coins; PASSED on
+      timing, then made wetter: splatter, rings — 09-04
+- [x] `playtest-ramp` ANSWERED "flat opening drags"; ease-in → ease-out — 09-04
 - [x] `persist-best` Best in localStorage; degrades to 0 when blocked — 09-04
 - [x] Endless mode: seeded RNG, chunk generator, fairness probe — 09-04
 - [x] Art pass: 8-bit backdrop, brick, particles, shake, hitstop, pig — 09-03
@@ -43,8 +44,7 @@
 
 - **No hosted URL**, but the blocker is gone: repo is PUBLIC. `deploy.yml` disabled.
 - **No outside playtesters, ever.** Weaker now that content is generated.
-- `minSlackTicks` floor is 6 (50ms) in every mode; measurement overruled the plan's 3.
-- "Flipfall" and "Gauntlet" are both placeholders.
+- `minSlackTicks` floor is 6 (50ms) in every mode. "Flipfall"/"Gauntlet" are placeholders.
 - Codex quota resets 09-15; Claude subagent spend limit was hit mid-run.
 
 ## Escalation log — (none)

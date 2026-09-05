@@ -4,14 +4,14 @@
      so every agent invocation stays cheap; this file is the opposite — it is the
      long-form record a human (or a fresh session) reads once when resuming. -->
 
-Last updated: 2026-09-05. Branch: `main`. HEAD `8411f69`.
+Last updated: 2026-09-05. Branch: `main`. HEAD `6469ac2`.
 
 ## Where to start
 
 ```bash
 npm install
 npm run dev          # http://localhost:5173  — this is the only way to play it
-npm test             # 91 tests, ~3s (the fairness probes still dominate)
+npm test             # 98 tests, ~3s (the fairness probes still dominate)
 npm run build        # tsc --noEmit && vite build
 npm run lint
 ```
@@ -141,6 +141,41 @@ Each of these is a deliberate departure. Do not "restore" them without re-readin
    `breather: true` and are exempt. `minSlackTicks` remains deliberately test-only —
    it is a contract on generated output, not an input to it.
 
+10. **Flow — a combo multiplier for Gauntlet — was designed by debating Codex, and
+    the first design it produced was rejected in review rather than shipped.**
+    Codex's opening pitch: a graze "arms" a bonus that only pays out if the player
+    survives to reach a subsequent coin; die first and the graze scores nothing.
+    Rejected because this game's whole ethos is brutal-but-never-retroactively-
+    unfair (see decision 2, and every graze/coin rule up to this point scores the
+    instant it happens and never takes it back) — voiding an already-earned skill
+    moment because of what happens *afterward* is a different, worse feeling than
+    a combo resetting on death. It's also weakly motivating in practice: `placeCoins`
+    already drops a coin near almost every hazard, so the "decision" the arm/cash-out
+    scheme claimed to create would usually resolve for free.
+
+    Presented that critique back to Codex, which conceded and re-designed rather
+    than defended: drop the arm/void mechanic, keep a forward-only streak
+    (`flow` in `RunState`) that multiplies coins and grazes earned while it's
+    live, and — the actual improvement over the version *I* had proposed — reset
+    it on landing (`player.grounded`, already computed every tick) instead of a
+    decay timer. Codex's reasoning for dropping the timer held up: at Gauntlet's
+    470–560px/s a timer's window covers a variable fraction of `CHUNK_W`, so a
+    streak would sometimes break because of where the generator happened to place
+    things, not because of anything the player did. Landing carries no such
+    coupling and needed no new state the sim didn't already have.
+
+    Shipped as: each graze banks `GRAZE_POINTS * flowMultiplier(flow)` immediately
+    (pre-increment — the graze that just happened is worth what was already
+    strung together, not the streak it's about to start), *then* increments
+    `flow`; coins spend the same multiplier but never build it, so Flow stays
+    tied to the near-miss skill specifically rather than climbing on ambient
+    pickups. `bonusScore()` changed from a derived `coins*rate + grazes*rate` to
+    a plain passthrough on an accumulated `RunState.bonus`, because the rate is
+    no longer constant across a run. 91 → 98 tests, including one that verifies
+    the exact per-tick payout formula against real generated Gauntlet runs from
+    outside `sim.ts` (`scoring.test.ts`, "pays every coin and graze at the
+    multiplier live the instant BEFORE that tick").
+
 ## Traps already paid for
 
 - **Pink blood does not work, and the reason generalises.** The obvious way to make
@@ -205,13 +240,14 @@ Each of these is a deliberate departure. Do not "restore" them without re-readin
 
 ## What is genuinely unverified
 
-- **The re-tuned ramp and both death styles have not been seen in motion.** All
-  landed 09-04 after a playtest of the *previous* build. The explosion's timing was
-  judged good and was deliberately not touched; everything added is colour and mass.
-- **The taunt has been read once, by nobody.** "YOU SUCK / DON'T EVEN TRY AGAIN"
-  fires on every death, dozens of times a session. The second line is reverse
-  psychology and is also still the only instruction there is. One fixed line may
-  wear out; a rotating set is the obvious next move if it does.
+- **The re-tuned ramp, both death styles, Gauntlet, and Flow have not been seen in
+  motion by a human.** All of 09-04 and 09-05's work landed on top of a playtest of
+  the *previous* build. Every real number so far (survival times, coin counts, the
+  mash-hover exploit, Flow actually reaching a real x3 in play) came from a scripted
+  bot calling `stepRun` directly — see the play-log artifact from 09-05. A bot has
+  no opinion on whether any of it *feels* good.
+- **The taunt rotates now** (7 lines, indexed by death count) but the rotation
+  itself has been read zero times by anyone — it shipped same-day as this note.
 - **No outside playtesters, ever.** The kill gate was passed by the author clearing
   the level. That was tolerable for a fixed level and is weaker now that the content
   is generated and nobody has seen most of it.

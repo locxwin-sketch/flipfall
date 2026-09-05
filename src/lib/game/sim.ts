@@ -1,7 +1,13 @@
 import { HITBOX_INSET, PLAYER_H, PLAYER_W } from '@/constants/physics'
 import { PLAYER_X } from '@/constants/layout'
 import { CHUNK_W } from '@/constants/difficulty'
-import { COIN_POINTS, GRAZE_BAND, GRAZE_POINTS } from '@/constants/scoring'
+import {
+  COIN_POINTS,
+  FLOW_MULT_CAP,
+  FLOW_MULT_STEP,
+  GRAZE_BAND,
+  GRAZE_POINTS,
+} from '@/constants/scoring'
 import type { Curve } from '@/constants/modes'
 import { overlap, sweep, type Box } from '@/lib/engine/aabb'
 import { scrollSpeedAt } from './difficulty'
@@ -37,6 +43,30 @@ export interface RunState {
    * unbounded array in a value copied every tick is a leak with extra steps.
    */
   takenCoins: readonly number[]
+  /**
+   * Consecutive near-misses since the last landing. Builds the Flow multiplier;
+   * landing (the existing surface clamp in stepPlayer) is the reset, not a timer —
+   * see constants/scoring.ts for why.
+   */
+  flow: number
+  /**
+   * Coins and grazes, ALREADY MULTIPLIED by whatever Flow was live the instant
+   * each was earned. Accumulated rather than derived: unlike `score()`, which is
+   * a pure function of final distance, this depends on the multiplier at the
+   * moment of each event and can only be built up tick by tick. Once added, never
+   * removed — dying ends future earning, it does not undo the past.
+   */
+  bonus: number
+}
+
+/**
+ * Multiplier applied to a coin or graze earned while `flow` near-misses are
+ * already live. The FIRST event in a streak is always worth its base value
+ * (flow=0 -> 1x): the bonus reflects what's already been strung together, not
+ * the event that just happened, so nothing is rewarded before it's earned.
+ */
+export function flowMultiplier(flow: number): number {
+  return Math.min(1 + flow * FLOW_MULT_STEP, FLOW_MULT_CAP)
 }
 
 export function initRun(world: World): RunState {
@@ -50,6 +80,8 @@ export function initRun(world: World): RunState {
     grazes: 0,
     grazing: false,
     takenCoins: [],
+    flow: 0,
+    bonus: 0,
   }
 }
 
@@ -101,9 +133,18 @@ export function stepRun(s: Readonly<RunState>, flip: boolean, dt: number, world:
     }
   }
 
+  // Flow. Landing is the reset — the same transition the presentation layer uses
+  // for landing sfx — checked before coins/grazes below so a coin or graze landed
+  // on the exact same tick sees the post-reset streak, not the one it just closed.
+  let flow = s.flow
+  let bonus = s.bonus
+  if (!dead && !s.player.grounded && player.grounded) flow = 0
+
   // Coins are checked against the same swept box as the hazards, so a coin can
   // never be missed by moving fast enough to pass through it — the bug the swept
   // test exists to prevent for hazards would be just as wrong here, only quieter.
+  // Coins spend the current Flow multiplier but never build it — that stays tied
+  // to grazing specifically, or Flow would climb on ambient pickups alone.
   let coins = s.coins
   let takenCoins = s.takenCoins
   if (!dead) {
@@ -111,6 +152,7 @@ export function stepRun(s: Readonly<RunState>, flip: boolean, dt: number, world:
       if (takenCoins.includes(c.id)) continue
       if (!overlap(swept, c)) continue
       coins++
+      bonus += COIN_POINTS * flowMultiplier(flow)
       takenCoins = [...takenCoins, c.id]
     }
     if (takenCoins !== s.takenCoins) {
@@ -120,9 +162,16 @@ export function stepRun(s: Readonly<RunState>, flip: boolean, dt: number, world:
   }
 
   // Grazing. Edge-triggered on entering the band, so flying the length of a pinch
-  // scores one near-miss rather than forty.
+  // scores one near-miss rather than forty. Pays out at the PRE-increment Flow —
+  // this graze is worth what was already strung together, then extends the streak
+  // for whatever comes next.
   const grazing = !dead && nearestClearance(after, world) <= GRAZE_BAND
-  const grazes = s.grazes + (grazing && !s.grazing ? 1 : 0)
+  const newGraze = grazing && !s.grazing
+  if (newGraze) {
+    bonus += GRAZE_POINTS * flowMultiplier(flow)
+    flow += 1
+  }
+  const grazes = s.grazes + (newGraze ? 1 : 0)
 
   return {
     tick,
@@ -134,6 +183,8 @@ export function stepRun(s: Readonly<RunState>, flip: boolean, dt: number, world:
     grazes,
     grazing,
     takenCoins,
+    flow,
+    bonus,
   }
 }
 
@@ -143,11 +194,13 @@ export function score(s: RunState): number {
 }
 
 /**
- * Coins and grazes, in the same units as `score`. Kept separate from it because
- * Endless must keep scoring distance and only distance — its bests were set before
- * any of this existed, and quietly inflating them would make the number on the
- * title screen a lie. Only Gauntlet adds this in; see `main.ts`.
+ * Coins and grazes, Flow-multiplied, in the same units as `score`. Kept separate
+ * from it because Endless must keep scoring distance and only distance — its
+ * bests were set before any of this existed, and quietly inflating them would
+ * make the number on the title screen a lie. Only Gauntlet adds this in; see
+ * `main.ts`. A thin passthrough to `s.bonus` rather than `coins*rate + grazes*rate`
+ * because the rate isn't constant across a run — see `flowMultiplier`.
  */
 export function bonusScore(s: RunState): number {
-  return s.coins * COIN_POINTS + s.grazes * GRAZE_POINTS
+  return s.bonus
 }

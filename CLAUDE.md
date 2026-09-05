@@ -56,5 +56,5 @@ machine will find lines no human can fly; this game shipped a 17ms level once.
 
 ## Current state
 
-Both modes playable, 91 tests green. Blocked on a human playtest — of the ramp,
-and now of Gauntlet — not on code. See `docs/STATE.md`, then `docs/JOURNAL.md`.
+Both modes playable, 98 tests green. Blocked on a human playtest — of the ramp,
+Gauntlet, and Flow — not on code. See `docs/STATE.md`, then `docs/JOURNAL.md`.
